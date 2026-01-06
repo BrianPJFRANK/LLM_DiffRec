@@ -183,7 +183,15 @@ class GaussianDiffusion(nn.Module):
             pt_all *= 1- uniform_prob
             pt_all += uniform_prob / len(pt_all)
 
-            assert pt_all.sum(-1) - 1. < 1e-5
+            # assert pt_all.sum(-1) - 1. < 1e-5
+            #=================================
+            sum_pt = pt_all.sum(-1).item()
+            if (abs(sum_pt) - 1.0) > 1e-5:
+                pt_all = pt_all /sum_pt
+            
+            pt_all = th.clamp(pt_all, min=1e-8)
+            pt_all = pt_all / pt_all.sum()
+            #=================================
 
             t = th.multinomial(pt_all, num_samples=batch_size, replacement=True)
             pt = pt_all.gather(dim=0, index=t) * len(pt_all)

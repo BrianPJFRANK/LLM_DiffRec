@@ -9,6 +9,10 @@ This is the pytorch implementation of our paper at SIGIR 2023:
 - python 3.8.10
 - pytorch 1.12.0
 - numpy 1.22.3
+- pandas 2.3.3
+
+# Support tool
+
 
 ## Usage
 ### Data
@@ -21,6 +25,9 @@ To reproduce the results and perform fine-tuning of the hyperparameters, please 
 #### DiffRec
 ```
 cd ./DiffRec
+```
+bash setup_env.sh
+```
 python main.py --cuda --dataset=$1 --data_path=../datasets/$1/ --lr=$2 --weight_decay=$3 --batch_size=$4 --dims=$5 --emb_size=$6 --mean_type=$7 --steps=$8 --noise_scale=$9 --noise_min=${10} --noise_max=${11} --sampling_steps=${12} --reweight=${13} --log_name=${14} --round=${15} --gpu=${16}
 ```
 or use run.sh

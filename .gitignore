@@ -1,0 +1,27 @@
+__pycache__/
+
+*.log
+*.json
+
+datasets/amazon*
+datasets/ml-1m*
+datasets/yelp*
+datasets/raw
+datasets/amazon_item_emb
+datasets/compressed_file
+datasets/raw*
+datasets/__MACOSX
+datasets/Yelp JSON
+datasets/datacheck.txt
+datasets/preprocess_data.py
+datasets/preprocess_data_v0.py
+
+worklog.txt
+test_npu.py
+saved_models
+models
+log
+output_log.txt
+kernel_meta
+fusion_result.json
+checkpoints

@@ -48,9 +48,29 @@ def data_load(train_path, valid_path, test_path):
 
 class DataDiffusion(Dataset):
     def __init__(self, data):
+        # self.data = data
         self.data = data
+        # Support scipy sparse matrices, numpy arrays, or tensors.
+        self.is_sparse = sp.isspmatrix(self.data)
+        
     def __getitem__(self, index):
-        item = self.data[index]
-        return item
+        # item = self.data[index]
+        # return item
+        if self.is_sparse:
+            # 獲取稀疏行並轉換為密集numpy數組
+            row = self.data[index]
+            # 確保轉換為密集數組
+            dense = row.toarray().astype(np.float32).squeeze(0)  # shape: (n_item,)
+            return torch.from_numpy(dense)
+        elif isinstance(self.data, np.ndarray):
+            return torch.from_numpy(self.data[index].astype(np.float32))
+        elif isinstance(self.data, torch.Tensor):
+            return self.data[index].float()
+        else:
+            raise TypeError(f"Unsupported data type for DataDiffusion: {type(self.data)}")
+
     def __len__(self):
+        #return len(self.data)
+        if hasattr(self.data, "shape"):
+            return self.data.shape[0]
         return len(self.data)

@@ -17,6 +17,13 @@ from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 
+#Add NPU Support
+import torch_npu
+from torch_npu.contrib import transfer_to_npu
+#Additional
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import models.gaussian_diffusion as gd
 from models.DNN import DNN
 import evaluate_utils
@@ -74,8 +81,18 @@ parser.add_argument('--reweight', type=bool, default=True, help='assign differen
 args = parser.parse_args()
 print("args:", args)
 
-os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-device = torch.device("cuda:0" if args.cuda else "cpu")
+# os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+# device = torch.device("cuda:0" if args.cuda else "cpu")
+# We need to support NPU, so the above code change
+if args.cuda and torch.npu.is_available():
+    device = torch.device(f"npu:{args.gpu}")
+    print(f"Using NPU Device: npu:{args.gpu}")
+elif args.cuda and torch.cuda.is_available():
+    device = torch.device(f"cuda:{args.gpu}")
+    print(f"Using CUDA Device: cuda:{args.gpu}")
+else:
+    device = torch.device("cpu")
+    print("Using CPU Device")
 
 print("Starting time: ", time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
 
@@ -85,8 +102,10 @@ valid_path = args.data_path + 'valid_list.npy'
 test_path = args.data_path + 'test_list.npy'
 
 train_data, train_data_ori, valid_y_data, test_y_data, n_user, n_item = data_utils.data_load(train_path, valid_path, test_path, args.w_min, args.w_max)
-train_dataset = data_utils.DataDiffusion(torch.FloatTensor(train_data.A))
-train_loader = DataLoader(train_dataset, batch_size=args.batch_size, pin_memory=True, shuffle=True, num_workers=4, worker_init_fn=worker_init_fn)
+# train_dataset = data_utils.DataDiffusion(torch.FloatTensor(train_data.A))
+train_dataset = data_utils.DataDiffusion(train_data)
+#train_loader = DataLoader(train_dataset, batch_size=args.batch_size, pin_memory=True, shuffle=True, num_workers=4, worker_init_fn=worker_init_fn)
+train_loader = DataLoader(train_dataset, batch_size=args.batch_size, pin_memory=True, shuffle=True, num_workers=0)
 test_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
 
 if args.tst_w_val:
