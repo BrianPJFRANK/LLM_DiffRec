@@ -1,0 +1,11 @@
+# 1. 首先運行對照組（確認代碼無誤）
+bash run_semantic_npu.sh amazon-instruments 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 baseline_test 1 0 0 original 1024 256
+
+# 2. 運行基礎語義模型
+bash run_semantic_npu.sh amazon-instruments 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 semantic_main 1 0 1 semantic 1024 256
+
+# 3. 運行雙流模型
+bash run_semantic_npu.sh amazon-instruments 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 dual_main 1 0 1 dual 1024 256
+
+# 4. 冷啟動數據集實驗
+bash run_semantic_npu.sh amazon-instruments_coldstart 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 coldstart_main 1 0 1 semantic 1024 256

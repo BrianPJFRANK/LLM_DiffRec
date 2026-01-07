@@ -23,12 +23,20 @@ import numpy as np
 # data1 = np.load('./amazon-movietv_small/test_list.npy', allow_pickle=True)
 
 data = np.load('./amazon-instruments/train_list.npy', allow_pickle=True)
-data0 = np.load('./amazon-instruments/valid_list.npy', allow_pickle=True)
-data1 = np.load('./amazon-instruments/test_list.npy', allow_pickle=True)
+data1 = np.load('./amazon-instruments/valid_list.npy', allow_pickle=True)
+data0 = np.load('./amazon-instruments/test_list.npy', allow_pickle=True)
+
+# data = np.load('./amazon-instruments_coldstart/train_list.npy', allow_pickle=True)
+# data0 = np.load('./amazon-instruments_coldstart/valid_list.npy', allow_pickle=True)
+# data1 = np.load('./amazon-instruments_coldstart/test_list.npy', allow_pickle=True)
+
+# data = np.load('./amazon-instruments_coldstart/embeddings/item_embeddings.npy', allow_pickle=True)
 
 # data = np.load('./ml-1m_clean/train_list.npy', allow_pickle=True)
 # data0 = np.load('./ml-1m_clean/valid_list.npy', allow_pickle=True)
 # data1 = np.load('./ml-1m_clean/test_list.npy', allow_pickle=True)
+
+# data = np.load('./amazon-instruments/embeddings/item_embeddings.npy', allow_pickle=True)
 
 # # 查看基本信息
 # print(f"數據形狀: {data.shape}")
@@ -58,4 +66,4 @@ with open('datacheck.txt', 'w') as f:
     f.write(f"物品ID範圍: {data[:, 1].min()} ~ {data[:, 1].max()}\n")
     f.write(f"交互數: {len(data)}\n")
 
-    f.write(f"總交互數: {len(data) + len(data0) + len(data1)}")
+    # f.write(f"總交互數: {len(data) + len(data0) + len(data1)}")
