@@ -11,10 +11,9 @@ This is the pytorch implementation of our paper at SIGIR 2023:
 - numpy 1.22.3
 - pandas 2.3.3
 
-# Support tool
+## Setup environment
+- pip install torch numpy pandas scipy bottleneck tqdm sentence-transformers 
 
-
-## Usage
 ### Data
 The experimental data are in './datasets' folder, including Amazon-Book, Yelp and MovieLens-1M. Note that the item embedding files of Amazon-book for clean setting and noisy setting are not here due to filesize limits, which are available at [here](https://rec.ustc.edu.cn/share/b6c7dc70-39de-11ef-93a6-a7cb897fc286). Those item embeddings used in L-DiffRec are derived from a pre-trained LightGCN specific to each dataset.
 

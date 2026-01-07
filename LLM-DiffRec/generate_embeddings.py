@@ -4,8 +4,8 @@ from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 # ===== 設定 =====
-PROCESSED_DIR = '../datasets/amazon-book_mine'
-EMBEDDING_DIR = '../datasets/amazon-book_mine/embeddings'
+PROCESSED_DIR = '../datasets/amazon-instruments'
+EMBEDDING_DIR = '../datasets/amazon-instruments/embeddings'
 MODEL_CACHE_DIR = '../models/bge-m3'
 
 os.makedirs(EMBEDDING_DIR, exist_ok=True)
@@ -31,12 +31,13 @@ model = SentenceTransformer(
     'BAAI/bge-m3',
     cache_folder=MODEL_CACHE_DIR
 )
+model.max_seq_length = 512  # 強制限制最大長度，避免 OOM
 
 # ===== 生成嵌入 =====
 print("Generating embeddings...")
 embeddings = model.encode(
     item_text_list,
-    batch_size=128,
+    batch_size=16,
     normalize_embeddings=True,
     show_progress_bar=True
 )

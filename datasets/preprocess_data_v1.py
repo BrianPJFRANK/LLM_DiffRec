@@ -8,11 +8,11 @@ import os
 from tqdm import tqdm
 
 # ===== 設定 =====
-RAW_DIR = './raw_amazon_insturments'
+RAW_DIR = './raw_amazon_instruments'
 PROCESSED_DIR = './amazon-instruments'
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 
-REVIEW_FILE = os.path.join(RAW_DIR, 'reviews_Musical_Instruments_5.json')
+REVIEW_FILE = os.path.join(RAW_DIR, 'Musical_Instruments_5.json')
 META_FILE = os.path.join(RAW_DIR, 'meta_Musical_Instruments.json')
 
 # ===== Step 1: 解析評論 (rating >= 4) =====
