@@ -13,7 +13,7 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
         super().__init__(mean_type, noise_schedule, noise_scale, noise_min, noise_max,
                         steps, device, history_num_per_term, beta_fixed)
     
-    def training_losses(self, model, x_start, user_semantic=None, reweight=False):
+    def training_losses(self, model, x_start, user_semantic=None, item_embeddings=None,reweight=False):
         """
         計算訓練損失，支持語義輸入
         
@@ -39,9 +39,9 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
         
         # 修改：傳遞語義向量給模型
         if user_semantic is not None:
-            model_output = model(x_t, ts, user_semantic)
+            model_output = model(x_t, ts, user_semantic=user_semantic, item_embeddings=item_embeddings)
         else:
-            model_output = model(x_t, ts)
+            model_output = model(x_t, ts, item_embeddings=item_embeddings)
         
         target = {
             ModelMeanType.START_X: x_start,
@@ -88,7 +88,7 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
         terms["loss"] /= pt
         return terms
     
-    def p_sample(self, model, x_start, steps, user_semantic=None, sampling_noise=False):
+    def p_sample(self, model, x_start, steps, user_semantic=None, item_embeddings=None, sampling_noise=False):
         """
         採樣過程，支持語義輸入
         
@@ -115,15 +115,15 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
             for i in indices:
                 t = th.tensor([i] * x_t.shape[0]).to(x_start.device)
                 if user_semantic is not None:
-                    x_t = model(x_t, t, user_semantic)
+                    x_t = model(x_t, t, user_semantic=user_semantic, item_embeddings=item_embeddings)
                 else:
-                    x_t = model(x_t, t)
+                    x_t = model(x_t, t, item_embeddings=item_embeddings)
             return x_t
         
         for i in indices:
             t = th.tensor([i] * x_t.shape[0]).to(x_start.device)
             # 修改：傳遞語義向量給p_mean_variance
-            out = self.p_mean_variance(model, x_t, t, user_semantic)
+            out = self.p_mean_variance(model, x_t, t, user_semantic, item_embeddings)
             if sampling_noise:
                 noise = th.randn_like(x_t)
                 nonzero_mask = (
@@ -134,7 +134,7 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
                 x_t = out["mean"]
         return x_t
     
-    def p_mean_variance(self, model, x, t, user_semantic=None):
+    def p_mean_variance(self, model, x, t, user_semantic=None, item_embeddings=None):
         """
         計算均值方差，支持語義輸入
         """
@@ -143,9 +143,9 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
         
         # 修改：傳遞語義向量給模型
         if user_semantic is not None:
-            model_output = model(x, t, user_semantic)
+            model_output = model(x, t, user_semantic, item_embeddings=item_embeddings)
         else:
-            model_output = model(x, t)
+            model_output = model(x, t, item_embeddings)
         
         model_variance = self.posterior_variance
         model_log_variance = self.posterior_log_variance_clipped

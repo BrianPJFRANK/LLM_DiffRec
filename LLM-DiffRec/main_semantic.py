@@ -16,7 +16,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import models.semantic_diffusion as gd
-from models.SemanticDNN import SemanticDNN, DualStreamSemanticDNN
+from models.SemanticDNN import SemanticDNN, DualStreamSemanticDNN, FiLMSemanticDNN, FiLMDotProductDNN
 from utils import semantic_utils
 from utils import evaluate_utils
 from utils import data_utils
@@ -41,8 +41,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='amazon-instruments', help='dataset name')
 parser.add_argument('--data_path', type=str, default='../datasets/', help='data path')
 parser.add_argument('--use_semantic', action='store_true', help='use semantic embeddings')
-parser.add_argument('--model_type', type=str, default='semantic', choices=['semantic', 'dual', 'original'], 
-                    help='model type: semantic, dual, or original')
+parser.add_argument('--model_type', type=str, default='semantic', choices=['semantic', 'dual', 'original', 'film', 'film_dot'], 
+                    help='model type: semantic, dual, original, film, or film_dot')
 parser.add_argument('--semantic_dim', type=int, default=768, help='semantic embedding dimension')
 parser.add_argument('--semantic_proj_dim', type=int, default=128, help='semantic projection dimension')
 
@@ -159,6 +159,24 @@ if args.use_semantic:
             time_type=args.time_type,
             norm=args.norm
         ).to(device)
+    elif args.model_type == 'film':
+        model = FiLMSemanticDNN(
+            in_dims, out_dims, args.emb_size,
+            semantic_dim=args.semantic_dim,
+            semantic_hidden_dim=256,  # 這裡預設給 256，對應語義控制器的隱藏層
+            time_type=args.time_type,
+            norm=args.norm,
+            use_semantic=True
+        ).to(device)
+    elif args.model_type == 'film_dot':
+        model = FiLMDotProductDNN(
+            in_dims, out_dims, args.emb_size,
+            semantic_dim=args.semantic_dim,
+            semantic_hidden_dim=256,
+            time_type=args.time_type,
+            norm=args.norm,
+            use_semantic=True
+        ).to(device)
     else:
         # 後向兼容原始模型
         from models.DNN import DNN
@@ -203,13 +221,15 @@ def evaluate_semantic(data_loader, data_te, mask_his, topN, semantic_processor=N
             if semantic_processor is not None:
                 user_semantic = semantic_processor.compute_user_semantic_simple(batch)
             
+            item_embs = semantic_processor.item_embeddings if semantic_processor is not None else None
+
             # 預測
             if user_semantic is not None:
-                prediction = diffusion.p_sample(model, batch, args.sampling_steps, 
-                                               user_semantic, args.sampling_noise)
+                prediction = diffusion.p_sample(model, batch, args.sampling_steps,
+                                               user_semantic=user_semantic, item_embeddings=item_embs, sampling_noise=args.sampling_noise)
             else:
-                prediction = diffusion.p_sample(model, batch, args.sampling_steps, 
-                                               None, args.sampling_noise)
+                prediction = diffusion.p_sample(model, batch, args.sampling_steps,
+                                               user_semantic=None, item_embeddings=item_embs, sampling_noise=args.sampling_noise)
             
             # 屏蔽歷史交互
             prediction[his_data.nonzero()] = -np.inf
@@ -249,13 +269,15 @@ for epoch in range(1, args.epochs + 1):
         if args.use_semantic and semantic_processor is not None:
             user_semantic = semantic_processor.compute_user_semantic_simple(batch)
         
+        item_embs = semantic_processor.item_embeddings if args.use_semantic and semantic_processor is not None else None
+
         # 優化步驟
         optimizer.zero_grad()
         
         if user_semantic is not None:
-            losses = diffusion.training_losses(model, batch, user_semantic, args.reweight)
+            losses = diffusion.training_losses(model, batch, user_semantic=user_semantic, item_embeddings=item_embs, reweight=args.reweight)
         else:
-            losses = diffusion.training_losses(model, batch, None, args.reweight)
+            losses = diffusion.training_losses(model, batch, user_semantic=None, item_embeddings=item_embs, reweight=args.reweight)
         
         loss = losses["loss"].mean()
         total_loss += loss.item()
