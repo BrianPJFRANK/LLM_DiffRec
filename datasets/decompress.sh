@@ -1,15 +1,22 @@
 #!/bin/bash
 
-for rar_file in *.rar; do
-    if [ -f "$rar_file" ]; then
-        echo "Decompressing: $rar_file"
+for gz_file in compressed_file/*.gz; do
+
+    if [ -f "$gz_file" ]; then
         
-        output_dir="${rar_file%.rar}"
-        mkdir -p "$output_dir"
+        base_name=$(basename "$gz_file")
         
-        unrar e "$rar_file" "$output_dir"
+        pure_name="${base_name%.gz}"
+        
+        target_dir="raw_$pure_name"
+        
+        echo "Processing: $base_name -> directory: $target_dir"
+        
+        mkdir -p "$target_dir"
+        
+        gunzip -c "$gz_file" > "$target_dir/$pure_name"
+        
     fi
 done
 
-echo ""
-echo "Decompress success!"
+echo "Decompression Finished!"

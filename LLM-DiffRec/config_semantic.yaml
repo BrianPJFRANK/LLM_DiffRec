@@ -1,0 +1,75 @@
+# config_semantic.yaml
+# Configuration file for semantic-aware diffusion recommender
+
+# Dataset configuration
+dataset:
+  name: "amazon-instruments"
+  data_path: "./datasets/"
+  use_cold_start: false  # Use cold-start version of dataset
+  
+# Semantic configuration
+semantic:
+  enabled: true
+  model_type: "semantic"  # semantic, dual, or original
+  semantic_dim: 768  # Dimension of pretrained embeddings
+  semantic_proj_dim: 128  # Dimension after projection
+  aggregation_method: "mean"  # mean, attention, transformer
+  
+# Model architecture
+model:
+  time_type: "cat"
+  dims: [1000]  # Network dimensions
+  emb_size: 10  # Timestep embedding size
+  norm: false
+  dropout: 0.5
+  
+# Diffusion process
+diffusion:
+  mean_type: "x0"  # x0 or eps
+  steps: 5
+  noise_schedule: "linear-var"
+  noise_scale: 0.0001
+  noise_min: 0.0005
+  noise_max: 0.005
+  reweight: true
+  
+# Training configuration
+training:
+  lr: 0.0001
+  weight_decay: 0.0
+  batch_size: 400
+  epochs: 1000
+  early_stop_patience: 20
+  save_path: "./saved_models_semantic/"
+  
+# Inference configuration
+inference:
+  sampling_steps: 0
+  sampling_noise: false
+  topN: [10, 20, 50, 100]
+  tst_w_val: false
+  
+# Device configuration
+device:
+  cuda: true
+  gpu: "0"  # NPU/GPU ID
+  
+# Experiment tracking
+experiment:
+  log_name: "semantic_experiment"
+  round: 1
+  save_logs: true
+  log_dir: "./logs/"
+  
+# Cold-start evaluation
+cold_start:
+  enabled: false
+  cold_start_ratio: 0.3
+  analyze_similarity: true
+  
+# Hyperparameter search (optional)
+hyperparameter_search:
+  enabled: false
+  lr_range: [0.00001, 0.0001, 0.001]
+  batch_size_range: [200, 400, 800]
+  steps_range: [2, 5, 10, 20]

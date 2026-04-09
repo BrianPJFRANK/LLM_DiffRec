@@ -1,7 +1,7 @@
 __pycache__/
 
 *.log
-*.json
+*.
 
 datasets/amazon*
 datasets/ml-1m*
@@ -15,13 +15,22 @@ datasets/Yelp JSON
 datasets/datacheck.txt
 datasets/preprocess_data.py
 datasets/preprocess_data_v0.py
+datasets/preprocess_data_v1.py
+datasets/validate_mapping.py
+
+LLM-DiffRec/test_semantic
+LLM-DiffRec/saved_models_semantic
+
+LLM-DiffRec/analysis/kernel_meta
 
 worklog.txt
 test_npu.py
-saved_models
-models
+saved_models*
+models/bge-m3
 log
 output_log.txt
 kernel_meta
 fusion_result.json
+config_semantic.yaml
 checkpoints
+

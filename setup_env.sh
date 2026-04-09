@@ -9,15 +9,19 @@ echo "=== Setting up DiffRec NPU Environment ==="
 echo "1. Activating Ascend environment..."
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
 
-# 先安裝缺失的依賴
 echo "Installing missing dependencies..."
 pip install cloudpickle ml-dtypes --quiet
 
 # 2. Install required Python packages
 echo "2. Installing Python dependencies..."
-pip install scipy bottleneck tqdm sentence-transformers transformers --quiet --root-user-action=ignore
+pip install numpy scipy bottleneck tqdm sentence-transformers transformers --quiet --root-user-action=ignore
+
+echo "Installing dependencies for specified versions..."
+pip install --force-reinstall numpy==1.24.0
+
 if [ $? -eq 0 ]; then
     echo "   Dependencies installed successfully"
+    python -c "import numpy;print(f'NumPy version: {numpy.__version__}')"
 else
     echo "   Warning: Some dependencies failed to install"
 fi
