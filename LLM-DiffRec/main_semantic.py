@@ -103,7 +103,7 @@ train_data, valid_y_data, test_y_data, n_user, n_item = data_utils.data_load(
 
 train_dataset = data_utils.DataDiffusion(train_data)
 train_loader = DataLoader(train_dataset, batch_size=args.batch_size, 
-                         pin_memory=True, shuffle=True, num_workers=0)
+                         pin_memory=True, shuffle=True, num_workers=16)
 test_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
 
 if args.tst_w_val:
@@ -197,7 +197,7 @@ print(f"Using semantic: {args.use_semantic}")
 print(f"Model type: {args.model_type}")
 
 # ===== 評估函數（支持語義） =====
-def evaluate_semantic(data_loader, data_te, mask_his, topN, semantic_processor=None):
+def evaluate_semantic(data_loader, data_te, mask_his, topN, semantic_processor=None, warm_items_mask=None):
     """
     評估函數，支持語義輸入
     """
@@ -213,7 +213,11 @@ def evaluate_semantic(data_loader, data_te, mask_his, topN, semantic_processor=N
     
     with torch.no_grad():
         for batch_idx, batch in enumerate(data_loader):
-            his_data = mask_his[e_idxlist[batch_idx*args.batch_size:batch_idx*args.batch_size+len(batch)]]
+            # his_data = mask_his[e_idxlist[batch_idx*args.batch_size:batch_idx*args.batch_size+len(batch)]]
+            # batch = batch.to(device)
+            start = batch_idx * args.batch_size
+            end = min((batch_idx + 1) * args.batch_size, e_N)
+
             batch = batch.to(device)
             
             # 計算用戶語義向量
@@ -231,9 +235,13 @@ def evaluate_semantic(data_loader, data_te, mask_his, topN, semantic_processor=N
                 prediction = diffusion.p_sample(model, batch, args.sampling_steps,
                                                user_semantic=None, item_embeddings=item_embs, sampling_noise=args.sampling_noise)
             
-            # 屏蔽歷史交互
-            prediction[his_data.nonzero()] = -np.inf
+            # 1. Mask 掉該 User 歷史看過的物品 (原始邏輯)
+            prediction[mask_his[start:end].toarray() > 0] = -np.inf
             
+            # 2. 新增：Mask 掉全域的 Warm Items (冷啟動對齊邏輯) 
+            if warm_items_mask is not None:
+                prediction[:, warm_items_mask] = -np.inf
+
             # 獲取topK推薦
             _, indices = torch.topk(prediction, topN[-1])
             indices = indices.cpu().numpy().tolist()
@@ -243,6 +251,16 @@ def evaluate_semantic(data_loader, data_te, mask_his, topN, semantic_processor=N
     test_results = evaluate_utils.computeTopNAccuracy(target_items, predict_items, topN)
     
     return test_results
+
+# ===== 獲取全域訓練集出現過的物品 (Warm Items) =====
+# 透過計算 train_data 矩陣的列總和，找出有被交互過的 items
+train_item_counts = np.array(train_data.sum(axis=0)).flatten()
+warm_items_indices = np.where(train_item_counts > 0)[0]
+print(f"🔥 Totally {len(warm_items_indices)} Warm Items (will be Mask in cold start evaluation)")
+
+# 判斷當前是否為冷啟動實驗 (透過數據集名稱判斷)
+is_cold_start_exp = 'coldstart' in args.dataset
+global_warm_mask = warm_items_indices if is_cold_start_exp else None
 
 # ===== 訓練循環 =====
 best_recall, best_epoch = -100, 0
@@ -278,6 +296,17 @@ for epoch in range(1, args.epochs + 1):
             losses = diffusion.training_losses(model, batch, user_semantic=user_semantic, item_embeddings=item_embs, reweight=args.reweight)
         else:
             losses = diffusion.training_losses(model, batch, user_semantic=None, item_embeddings=item_embs, reweight=args.reweight)
+
+        loss = losses["loss"].mean()
+        total_loss += loss.item()
+
+        loss.backward()
+        optimizer.step()
+
+        if user_semantic is not None:
+            losses = diffusion.training_losses(model, batch, user_semantic=user_semantic, item_embeddings=item_embs, reweight=args.reweight)
+        else:
+            losses = diffusion.training_losses(model, batch, user_semantic=None, item_embeddings=item_embs, reweight=args.reweight)
         
         loss = losses["loss"].mean()
         total_loss += loss.item()
@@ -293,17 +322,20 @@ for epoch in range(1, args.epochs + 1):
         
         # 驗證集評估
         valid_results = evaluate_semantic(
-            test_loader, valid_y_data, train_data, eval(args.topN), semantic_processor
+            test_loader, valid_y_data, train_data, eval(args.topN), semantic_processor,
+            warm_items_mask=global_warm_mask
         )
         
         # 測試集評估
         if args.tst_w_val:
             test_results = evaluate_semantic(
-                test_twv_loader, test_y_data, mask_tv, eval(args.topN), semantic_processor
+                test_twv_loader, test_y_data, mask_tv, eval(args.topN), semantic_processor,
+                warm_items_mask=global_warm_mask
             )
         else:
             test_results = evaluate_semantic(
-                test_loader, test_y_data, mask_tv, eval(args.topN), semantic_processor
+                test_loader, test_y_data, mask_tv, eval(args.topN), semantic_processor,
+                warm_items_mask=global_warm_mask
             )
         
         evaluate_utils.print_results(None, valid_results, test_results)

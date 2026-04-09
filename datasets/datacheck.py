@@ -22,9 +22,9 @@ import numpy as np
 # data0 = np.load('./amazon-movietv_small/valid_list.npy', allow_pickle=True)
 # data1 = np.load('./amazon-movietv_small/test_list.npy', allow_pickle=True)
 
-data = np.load('./amazon-instruments/train_list.npy', allow_pickle=True)
-data0 = np.load('./amazon-instruments/valid_list.npy', allow_pickle=True)
-data1 = np.load('./amazon-instruments/test_list.npy', allow_pickle=True)
+# data = np.load('./amazon-instruments/train_list.npy', allow_pickle=True)
+# data0 = np.load('./amazon-instruments/valid_list.npy', allow_pickle=True)
+# data1 = np.load('./amazon-instruments/test_list.npy', allow_pickle=True)
 
 # data = np.load('./amazon-instruments_coldstart/train_list.npy', allow_pickle=True)
 # data0 = np.load('./amazon-instruments_coldstart/valid_list.npy', allow_pickle=True)
@@ -37,6 +37,11 @@ data1 = np.load('./amazon-instruments/test_list.npy', allow_pickle=True)
 # data1 = np.load('./ml-1m_clean/test_list.npy', allow_pickle=True)
 
 # data = np.load('./amazon-instruments/embeddings/item_embeddings.npy', allow_pickle=True)
+
+data = np.load('./amazon-Software/train_list.npy', allow_pickle=True)
+data0 = np.load('./amazon-Software/valid_list.npy', allow_pickle=True)
+data1 = np.load('./amazon-Software/test_list.npy', allow_pickle=True)
+
 
 # # 查看基本信息
 # print(f"數據形狀: {data.shape}")

@@ -178,10 +178,20 @@ def generate_coldstart_dataset(original_dir, coldstart_dir, cold_start_ratio=0.3
     # ===== 9. 保存新數據集 =====
     print(f"\nSaving cold-start dataset to: {coldstart_dir}")
     
+    print("Splitting cold-start test set 50/50 into Valid and Test...")
+    np.random.seed(42)  # 固定隨機種子保證可復現
+    total_cold_interactions = len(new_test_pairs_remapped)
+    shuffled_indices = np.random.permutation(total_cold_interactions)
+    shuffled_cold_pairs = new_test_pairs_remapped[shuffled_indices]
+
+    split_idx = total_cold_interactions // 2
+    final_valid_cold_pairs = shuffled_cold_pairs[:split_idx]
+    final_test_cold_pairs = shuffled_cold_pairs[split_idx:]
+    
     # 保存交互列表
     np.save(os.path.join(coldstart_dir, 'train_list.npy'), new_train_pairs_remapped)
-    np.save(os.path.join(coldstart_dir, 'valid_list.npy'), new_valid_pairs_remapped)
-    np.save(os.path.join(coldstart_dir, 'test_list.npy'), new_test_pairs_remapped)
+    np.save(os.path.join(coldstart_dir, 'valid_list.npy'), final_valid_cold_pairs)
+    np.save(os.path.join(coldstart_dir, 'test_list.npy'), final_test_cold_pairs)
     
     # 保存映射
     with open(os.path.join(coldstart_dir, 'user_map.pkl'), 'wb') as f:
@@ -228,8 +238,8 @@ def generate_coldstart_dataset(original_dir, coldstart_dir, cold_start_ratio=0.3
     print(f"Cold-start ratio (items): {len(true_cold_items)/all_items_in_test:.2%}")
     print(f"\nInteractions:")
     print(f"  Train: {len(new_train_pairs_remapped)}")
-    print(f"  Valid: {len(new_valid_pairs_remapped)}")
-    print(f"  Test (cold-start): {len(new_test_pairs_remapped)}")
+    print(f"  Valid: {len(final_valid_cold_pairs)}")
+    print(f"  Test (cold-start): {len(final_test_cold_pairs)}")
     
     # 保存詳細統計
     cold_stats = {
@@ -240,9 +250,9 @@ def generate_coldstart_dataset(original_dir, coldstart_dir, cold_start_ratio=0.3
         'n_cold_start_items': len(true_cold_items),
         'cold_start_ratio': len(true_cold_items) / all_items_in_test,
         'train_interactions': len(new_train_pairs_remapped),
-        'valid_interactions': len(new_valid_pairs_remapped),
-        'test_interactions': len(new_test_pairs_remapped),
-        'cold_start_test_interactions': len(new_test_pairs_remapped)
+        'valid_interactions': len(final_valid_cold_pairs),
+        'test_interactions': len(final_test_cold_pairs),
+        'total_cold_interaction': total_cold_interactions
     }
     
     with open(os.path.join(coldstart_dir, 'cold_start_stats.json'), 'w') as f:
@@ -256,8 +266,8 @@ def generate_coldstart_dataset(original_dir, coldstart_dir, cold_start_ratio=0.3
 
 if __name__ == "__main__":
     # 配置參數
-    ORIGINAL_DIR = "../datasets/amazon-instruments"
-    COLDSTART_DIR = "../datasets/amazon-instruments_coldstart"
+    ORIGINAL_DIR = "../datasets/amazon-Software"
+    COLDSTART_DIR = "../datasets/amazon-Software_coldstart"
     COLD_START_RATIO = 0.3  # 30%的測試物品是冷啟動物品
     
     # 生成冷啟動數據集

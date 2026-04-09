@@ -69,7 +69,6 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
         
         terms["loss"] = weight * loss
         
-        # 更新 Lt_history & Lt_count (保持不變)
         for t, loss_value in zip(ts, terms["loss"]):
             if self.Lt_count[t] == self.history_num_per_term:
                 Lt_history_old = self.Lt_history.clone()
@@ -84,7 +83,7 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
                     print(self.Lt_count[t])
                     print(loss_value)
                     raise ValueError
-        
+
         terms["loss"] /= pt
         return terms
     

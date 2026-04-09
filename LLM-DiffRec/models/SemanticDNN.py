@@ -104,7 +104,7 @@ class SemanticDNN(nn.Module):
                 layer.weight.data.normal_(0.0, std)
                 layer.bias.data.normal_(0.0, 0.001)
     
-    def forward(self, x, timesteps, user_semantic=None):
+    def forward(self, x, timesteps, user_semantic=None, item_embeddings=None):
         """
         Args:
             x: 用戶交互向量 [batch_size, n_items]
@@ -240,7 +240,7 @@ class DualStreamSemanticDNN(nn.Module):
         # 初始化時間嵌入層
         init_layer(self.emb_layer)
     
-    def forward(self, x, timesteps, user_semantic=None):
+    def forward(self, x, timesteps, user_semantic=None, item_embeddings=None):
         # 時間嵌入
         time_emb = timestep_embedding(timesteps, self.time_emb_dim).to(x.device)
         time_emb = self.emb_layer(time_emb)
@@ -375,7 +375,7 @@ class FiLMSemanticDNN(nn.Module):
             if final_layer.bias is not None:
                 nn.init.zeros_(final_layer.bias)
     
-    def forward(self, x, timesteps, user_semantic=None):
+    def forward(self, x, timesteps, user_semantic=None, item_embeddings=None):
         # 1. 時間嵌入
         time_emb = timestep_embedding(timesteps, self.time_emb_dim).to(x.device)
         time_emb = self.emb_layer(time_emb)
@@ -475,7 +475,7 @@ class FiLMDotProductDNN(nn.Module):
         self.semantic_output_layer = nn.Linear(last_hidden_dim, self.semantic_dim)
 
         # 為了穩定訓練，加入可學習的溫度縮放 (Temperature) 與 物品偏差 (Item Bias)
-        self.tau = nn.Parameter(torch.ones(1) * 10.0) # 初始放大 10 倍，避免 L2 內積數值過小
+        #self.tau = nn.Parameter(torch.ones(1) * 10.0) # 初始放大 10 倍，避免 L2 內積數值過小
         #self.item_bias = nn.Parameter(torch.zeros(self.n_items))
 
         self.init_weights()
@@ -544,10 +544,12 @@ class FiLMDotProductDNN(nn.Module):
         item_embeddings_norm = F.normalize(item_embeddings, p=2, dim=-1)
 
         # 矩陣內積: [batch_size, 1024] x [1024, n_items] -> [batch_size, n_items]
-        logits = torch.matmul(pred_semantic_norm, item_embeddings_norm.transpose(0, 1))
+        logits = torch.matmul(pred_semantic_norm, item_embeddings.transpose(0, 1))
 
-        # 縮放與加上偏差，還原到 DiffRec 適應的 Logits 空間
-        out = logits * self.tau
-        #out = logits * self.tau + self.item_bias
+        # 套用固定溫度參數 (tau=0.1) 與 Diffusion 縮放因子 (scale=10.0)
+        # 參考 SimCLR 標準設定，放大差異的同時保證整體數值範圍符合 Diffusion Loss 需求
+        tau = 0.1
+        scale = 10.0
+        out = (logits / tau) * scale
 
         return out

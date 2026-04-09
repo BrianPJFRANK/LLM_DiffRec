@@ -8,12 +8,12 @@ import os
 from tqdm import tqdm
 
 # ===== 設定 =====
-RAW_DIR = './raw_amazon_insturments'
-PROCESSED_DIR = './amazon-instruments'
+RAW_DIR = './raw_amazon_Software'
+PROCESSED_DIR = './amazon-Software'
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 
-REVIEW_FILE = os.path.join(RAW_DIR, 'reviews_Musical_Instruments_5.json')
-META_FILE = os.path.join(RAW_DIR, 'meta_Musical_Instruments.json')
+REVIEW_FILE = os.path.join(RAW_DIR, 'Software_5.json')
+META_FILE = os.path.join(RAW_DIR, 'meta_Software.json')
 
 # ===== Step 1: 解析評論 (rating >= 4) =====
 print("Loading reviews...")

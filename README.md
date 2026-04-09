@@ -6,9 +6,9 @@ This is the pytorch implementation of our paper at SIGIR 2023:
 
 ## Environment
 - Anaconda 3
-- python 3.8.10
-- pytorch 1.12.0
-- numpy 1.22.3
+- python 3.11.13
+- pytorch 2.9.0
+- numpy 1.24.0
 - pandas 2.3.3
 
 # Support tool

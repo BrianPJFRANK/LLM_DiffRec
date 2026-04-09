@@ -18,7 +18,6 @@ from utils import semantic_utils
 import evaluate_utils
 import data_utils
 
-# 參數解析
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='amazon-instruments', help='dataset name')
 parser.add_argument('--data_path', type=str, default='./datasets/', help='data path')
@@ -28,25 +27,21 @@ parser.add_argument('--model_type', type=str, default='semantic', choices=['sema
                     help='model type used in training')
 parser.add_argument('--cold_start', action='store_true', help='evaluate on cold-start test set')
 
-# 推理參數
 parser.add_argument('--batch_size', type=int, default=400)
 parser.add_argument('--topN', type=str, default='[10, 20, 50, 100]')
 parser.add_argument('--tst_w_val', action='store_true', help='test with validation')
 parser.add_argument('--cuda', action='store_true', help='use CUDA/NPU')
 parser.add_argument('--gpu', type=str, default='0', help='gpu/npu card ID')
 
-# 擴散推理參數
 parser.add_argument('--mean_type', type=str, default='x0', help='MeanType for diffusion: x0, eps')
 parser.add_argument('--sampling_noise', type=bool, default=False, help='sampling with noise or not')
 parser.add_argument('--sampling_steps', type=int, default=0, help='steps of forward process during inference')
 
-# 語義參數
 parser.add_argument('--semantic_dim', type=int, default=768, help='semantic embedding dimension')
 
 args = parser.parse_args()
 print("Semantic Inference Args:", args)
 
-# 設備設置
 if args.cuda and torch.npu.is_available():
     device = torch.device(f"npu:{args.gpu}")
     print(f"Using NPU Device: npu:{args.gpu}")
@@ -59,14 +54,12 @@ else:
 
 print("Starting inference at:", time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
 
-# ===== 確定數據集路徑 =====
 if args.cold_start:
     dataset_dir = os.path.join(args.data_path, f"{args.dataset}_coldstart")
     print(f"Using cold-start dataset: {dataset_dir}")
 else:
     dataset_dir = os.path.join(args.data_path, args.dataset)
 
-# ===== 數據加載 =====
 train_path = os.path.join(dataset_dir, 'train_list.npy')
 valid_path = os.path.join(dataset_dir, 'valid_list.npy')
 test_path = os.path.join(dataset_dir, 'test_list.npy')
@@ -87,7 +80,6 @@ mask_tv = train_data + valid_y_data
 
 print(f'Data loaded. Users: {n_user}, Items: {n_item}')
 
-# ===== 語義處理器 =====
 semantic_processor = None
 if args.use_semantic:
     semantic_processor = semantic_utils.SemanticProcessor(dataset_dir, device=device)
@@ -96,14 +88,12 @@ if args.use_semantic:
         print("⚠️ Semantic embeddings not available, disabling semantic mode")
         args.use_semantic = False
 
-# ===== 加載模型 =====
 print(f"Loading model from: {args.model_path}")
 try:
     model = torch.load(args.model_path, map_location=device)
     model.eval()
     print("✅ Model loaded successfully")
     
-    # 檢查模型類型
     model_class = model.__class__.__name__
     print(f"Model class: {model_class}")
     
@@ -111,7 +101,6 @@ except Exception as e:
     print(f"❌ Error loading model: {e}")
     sys.exit(1)
 
-# ===== 創建擴散實例 =====
 if args.mean_type == 'x0':
     mean_type = gd.ModelMeanType.START_X
 elif args.mean_type == 'eps':
@@ -119,8 +108,6 @@ elif args.mean_type == 'eps':
 else:
     raise ValueError(f"Unimplemented mean type {args.mean_type}")
 
-# 擴散參數從模型文件名中解析或使用默認值
-# 注意：這裡需要根據訓練時的參數設置，實際使用時可能需要傳遞更多參數
 diffusion = gd.SemanticGaussianDiffusion(
     mean_type, 
     noise_schedule='linear-var',
@@ -133,21 +120,16 @@ diffusion = gd.SemanticGaussianDiffusion(
 
 print("Diffusion model ready")
 
-# ===== 冷啟動物品識別 =====
 cold_start_items = None
 if args.cold_start and semantic_processor is not None:
     print("\nIdentifying cold-start items...")
-    # 加載訓練交互
     train_pairs = np.load(train_path)
     cold_start_items = semantic_processor.get_cold_start_items(train_pairs)
     print(f"Cold-start items identified: {len(cold_start_items)}")
 
-# ===== 評估函數 =====
 def evaluate_with_semantic(data_loader, data_te, mask_his, topN, 
                           semantic_processor=None, cold_start_items=None):
-    """
-    評估函數，支持語義輸入和冷啟動分析
-    """
+
     model.eval()
     e_idxlist = list(range(mask_his.shape[0]))
     e_N = mask_his.shape[0]

@@ -14,7 +14,7 @@ pip install cloudpickle ml-dtypes --quiet
 
 # 2. Install required Python packages
 echo "2. Installing Python dependencies..."
-pip install scipy bottleneck tqdm sentence-transformers transformers --quiet --root-user-action=ignore
+pip install numpy scipy bottleneck tqdm sentence-transformers transformers --quiet --root-user-action=ignore
 
 echo "Installing dependencies for specified versions..."
 pip install --force-reinstall numpy==1.24.0
