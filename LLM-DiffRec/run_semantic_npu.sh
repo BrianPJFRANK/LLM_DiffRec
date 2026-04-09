@@ -27,8 +27,7 @@ LOG_NAME=${14}      # 14: log name
 ROUND=${15}         # 15: experiment round
 GPU=${16}           # 16: GPU/NPU ID
 
-# 新增的4個語義參數
-USE_SEMANTIC=${17:-1}           # 17: use semantic (1或0)
+USE_SEMANTIC=${17:-1}           # 17: use semantic (1 or 0)
 MODEL_TYPE=${18:-"semantic"}    # 18: model type
 SEMANTIC_DIM=${19:-1024}        # 19: semantic dim
 SEMANTIC_PROJ_DIM=${20:-256}    # 20: semantic projection dim
@@ -56,7 +55,6 @@ echo "========================================"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 mkdir -p ./log/${DATASET}_semantic
 
-# 基礎命令
 CMD="python -u main_semantic.py \
     --cuda \
     --dataset=$DATASET \
@@ -80,7 +78,6 @@ CMD="python -u main_semantic.py \
     --semantic_dim=$SEMANTIC_DIM \
     --semantic_proj_dim=$SEMANTIC_PROJ_DIM"
 
-# 根據USE_SEMANTIC添加或省略--use_semantic參數
 if [ "$USE_SEMANTIC" = "1" ]; then
     CMD="$CMD --use_semantic"
 fi
@@ -101,13 +98,13 @@ TRAINING_STATUS=$?
 if [ $TRAINING_STATUS -eq 0 ]; then
     echo ""
     echo "========================================"
-    echo "✓ SEMANTIC TRAINING COMPLETED SUCCESSFULLY"
+    echo "SEMANTIC TRAINING COMPLETED SUCCESSFULLY"
     echo "========================================"
     echo "Log file: ./log/${DATASET}_semantic/${ROUND}_${LOG_NAME}_${TIMESTAMP}.txt"
     echo "Models saved: ./saved_models_semantic/"
 else
     echo ""
-    echo "========================================"
-    echo "✗ TRAINING FAILED (Exit code: $TRAINING_STATUS)"
-    echo "========================================"
+    echo "============================================="
+    echo "TRAINING FAILED (Exit code: $TRAINING_STATUS)"
+    echo "============================================="
 fi

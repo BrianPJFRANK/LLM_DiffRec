@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# 設定參數
 DATASET="amazon-Software_coldstart"
 DATA_PATH="../datasets/"
 LR=0.001
@@ -9,9 +8,9 @@ EPOCHS=200
 GPU_ID="0"
 
 echo "=================================================="
-echo "🚀 開始運行 Baseline A: MultiVAE"
-echo "數據集: ${DATASET} | 學習率: ${LR} | Batch Size: ${BATCH_SIZE}"
-echo "硬體: Huawei Ascend 910 NPU (ID: ${GPU_ID})"
+echo "Start running Baseline A: MultiVAE"
+echo "Dataset: ${DATASET} | Learning Rate: ${LR} | Batch Size: ${BATCH_SIZE}"
+echo "GPU/NPU/CPU: (ID: ${GPU_ID})"
 echo "=================================================="
 
 python main_multivae.py \

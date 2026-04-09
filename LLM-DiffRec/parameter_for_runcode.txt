@@ -1,20 +1,22 @@
-# 1. 首先運行對照組（確認代碼無誤）
-bash run_semantic_npu.sh amazon-instruments 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 baseline_test 1 0 0 original 1024 256
+Running Command Example:
 
-# 2. 運行基礎語義模型
-bash run_semantic_npu.sh amazon-instruments 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 semantic_main 1 0 1 semantic 1024 256
+1. Orginal DiffRec
+bash run_semantic_npu.sh amazon-instruments 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 original_standard 1 0 0 original 1024 256
 
-# 3. 運行雙流模型
-bash run_semantic_npu.sh amazon-instruments 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 dual_main 1 0 1 dual 1024 256
+2. Semantic Model
+bash run_semantic_npu.sh amazon-instruments 0.00025 0.0001 128 "[150, 400]" 10 x0 8 0.0012 0.006 0.025 0 1 semantic_steps8 1 0 1 semantic 1024 256
 
-# 4. 冷啟動數據集實驗
-bash run_semantic_npu.sh amazon-instruments_coldstart 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 coldstart_main 1 0 1 semantic 1024 256
+3. Dual-Stream Semantic Model
+bash run_semantic_npu.sh amazon-instruments 0.0001 0.00008 256 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 dual_lowLR 1 0 1 dual 1024 256
 
-#5. 運行FiLM語義調變模型（標準數據集）
-bash run_semantic_npu.sh amazon-instruments 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 film_main 1 0 1 film 1024 256
+4. FiLM Model
+bash run_semantic_npu.sh amazon-instruments 0.00025 0.00008 128 "[200, 600]" 10 x0 10 0.0012 0.006 0.025 0 1 film_steps10 1 0 1 film 1024 256
 
-#5. 運行FiLM架構模型的（冷啟動數據集）
-bash run_semantic_npu.sh amazon-instruments_coldstart 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 coldstart_film 1 0 1 film 1024 256
+5. FiLM-dot Model (cold-start)
+bash run_semantic_npu.sh amazon-instruments_coldstart 0.001 0.0005 128 "[512, 1024]" 10 x0 8 0.0012 0.006 0.025 0 1 cold_filmdot_highLR_extreme_step8 1 0 1 film_dot 1024 256
 
-#6. 運行film_dot
-bash run_semantic_npu.sh amazon-instruments_coldstart 0.00025 0.00008 128 "[150, 400]" 10 x0 4 0.0012 0.006 0.025 0 1 coldstart_filmdot_fix 1 0 1 film_dot 1024 256
+6. Inference in standard dataset
+python inference_semantic.py --dataset amazon-instruments --data_path ../datasets/ --model_path ./saved_models_semantic/<YourModelName.pth> --use_semantic --model_type film --batch_size 128 --semantic_dim 1024 --cuda --gpu 0
+
+7. Inference in coldstart dataset
+python inference_semantic.py --dataset amazon-instruments --data_path ../datasets/ --model_path ./saved_models_semantic/<YourModelName.pth> --use_semantic --model_type film --batch_size 128 --semantic_dim 1024 --cuda --gpu 0

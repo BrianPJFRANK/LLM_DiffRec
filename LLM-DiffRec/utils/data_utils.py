@@ -26,8 +26,8 @@ def data_load(train_path, valid_path, test_path):
         if iid > iid_max:
             iid_max = iid
     
-    n_user = uid_max + 1
-    n_item = iid_max + 1
+    n_user = int(max(train_list[:, 0].max(), valid_list[:, 0].max(), test_list[:, 0].max()) + 1)
+    n_item = int(max(train_list[:, 1].max(), valid_list[:, 1].max(), test_list[:, 1].max()) + 1)
     print(f'user num: {n_user}')
     print(f'item num: {n_item}')
 
@@ -57,9 +57,7 @@ class DataDiffusion(Dataset):
         # item = self.data[index]
         # return item
         if self.is_sparse:
-            # 獲取稀疏行並轉換為密集numpy數組
             row = self.data[index]
-            # 確保轉換為密集數組
             dense = row.toarray().astype(np.float32).squeeze(0)  # shape: (n_item,)
             return torch.from_numpy(dense)
         elif isinstance(self.data, np.ndarray):

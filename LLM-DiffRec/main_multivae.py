@@ -49,10 +49,9 @@ current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 log_filename = os.path.join(log_dir, f"multivae_bs{args.batch_size}_{current_time}.txt")
 sys.stdout = Logger(log_filename)
 
-print(f"✅ Logging output to: {log_filename}")
+print(f"Logging output to: {log_filename}")
 
 
-# NPU/GPU 適配邏輯
 if args.cuda and hasattr(torch, 'npu') and torch.npu.is_available():
     import torch_npu
     device = torch.device(f"npu:{args.gpu}")
@@ -62,7 +61,6 @@ elif args.cuda and torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
-# 載入數據 (與 DiffRec 完全一致)
 train_path = os.path.join(args.data_path, args.dataset, 'train_list.npy')
 valid_path = os.path.join(args.data_path, args.dataset, 'valid_list.npy')
 test_path = os.path.join(args.data_path, args.dataset, 'test_list.npy')
@@ -70,12 +68,10 @@ test_path = os.path.join(args.data_path, args.dataset, 'test_list.npy')
 train_data, valid_y_data, test_y_data, n_user, n_item = data_utils.data_load(train_path, valid_path, test_path)
 mask_tv = train_data + valid_y_data
 
-# 建立 DataLoader
 train_tensor = torch.FloatTensor(train_data.toarray())
 train_dataset = TensorDataset(train_tensor)
 train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
 
-# 初始化 MultiVAE
 p_dims = [200, 600, n_item]
 model = MultiVAE(p_dims).to(device)
 optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
@@ -87,7 +83,6 @@ def loss_function(recon_x, x, mu, logvar, anneal):
     KLD = -0.5 * torch.mean(torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
     return BCE + anneal * KLD
 
-# 評估函數
 def evaluate_vae(model, test_data_matrix, mask_matrix, topN):
     model.eval()
     predict_items, target_items = [], []
@@ -120,7 +115,6 @@ for epoch in range(1, args.epochs + 1):
     for batch in train_loader:
         batch = batch[0].to(device)
 
-        # KL 退火
         anneal = min(args.anneal_cap, 1. * update_count / args.total_anneal_steps)
         update_count += 1
 

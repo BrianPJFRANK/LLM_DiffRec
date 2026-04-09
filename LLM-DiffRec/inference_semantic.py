@@ -15,15 +15,15 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import models.semantic_diffusion as gd
 from utils import semantic_utils
-import evaluate_utils
-import data_utils
+from utils import evaluate_utils
+from utils import data_utils
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='amazon-instruments', help='dataset name')
 parser.add_argument('--data_path', type=str, default='./datasets/', help='data path')
 parser.add_argument('--model_path', type=str, required=True, help='path to trained model')
 parser.add_argument('--use_semantic', action='store_true', help='use semantic embeddings')
-parser.add_argument('--model_type', type=str, default='semantic', choices=['semantic', 'dual', 'original'], 
+parser.add_argument('--model_type', type=str, default='semantic', choices=['semantic', 'dual', 'original', 'film', 'film_dot'], 
                     help='model type used in training')
 parser.add_argument('--cold_start', action='store_true', help='evaluate on cold-start test set')
 
@@ -37,12 +37,12 @@ parser.add_argument('--mean_type', type=str, default='x0', help='MeanType for di
 parser.add_argument('--sampling_noise', type=bool, default=False, help='sampling with noise or not')
 parser.add_argument('--sampling_steps', type=int, default=0, help='steps of forward process during inference')
 
-parser.add_argument('--semantic_dim', type=int, default=768, help='semantic embedding dimension')
+parser.add_argument('--semantic_dim', type=int, default=1024, help='semantic embedding dimension')
 
 args = parser.parse_args()
 print("Semantic Inference Args:", args)
 
-if args.cuda and torch.npu.is_available():
+if args.cuda and hasattr(torch, 'npu') and torch.npu.is_available():
     device = torch.device(f"npu:{args.gpu}")
     print(f"Using NPU Device: npu:{args.gpu}")
 elif args.cuda and torch.cuda.is_available():
@@ -85,20 +85,20 @@ if args.use_semantic:
     semantic_processor = semantic_utils.SemanticProcessor(dataset_dir, device=device)
     
     if semantic_processor.item_embeddings is None:
-        print("⚠️ Semantic embeddings not available, disabling semantic mode")
+        print("Semantic embeddings not available, disabling semantic mode")
         args.use_semantic = False
 
 print(f"Loading model from: {args.model_path}")
 try:
     model = torch.load(args.model_path, map_location=device)
     model.eval()
-    print("✅ Model loaded successfully")
+    print("Model loaded successfully")
     
     model_class = model.__class__.__name__
     print(f"Model class: {model_class}")
     
 except Exception as e:
-    print(f"❌ Error loading model: {e}")
+    print(f"Error loading model: {e}")
     sys.exit(1)
 
 if args.mean_type == 'x0':
@@ -137,11 +137,9 @@ def evaluate_with_semantic(data_loader, data_te, mask_his, topN,
     predict_items = []
     target_items = []
     
-    # 收集目標物品
     for i in range(e_N):
         target_items.append(data_te[i, :].nonzero()[1].tolist())
     
-    # 冷啟動分析統計
     cold_start_stats = {
         'total_users': 0,
         'users_with_cold_items': 0,
@@ -154,29 +152,28 @@ def evaluate_with_semantic(data_loader, data_te, mask_his, topN,
         for batch_idx, batch in enumerate(data_loader):
             his_data = mask_his[e_idxlist[batch_idx*args.batch_size:batch_idx*args.batch_size+len(batch)]]
             batch = batch.to(device)
-            
-            # 計算用戶語義向量
+
             user_semantic = None
+            item_embs = None
             if semantic_processor is not None:
                 user_semantic = semantic_processor.compute_user_semantic_simple(batch)
+                item_embs = semantic_processor.item_embeddings
             
-            # 預測
-            if user_semantic is not None:
-                prediction = diffusion.p_sample(model, batch, args.sampling_steps, 
-                                               user_semantic, args.sampling_noise)
-            else:
-                prediction = diffusion.p_sample(model, batch, args.sampling_steps, 
-                                               None, args.sampling_noise)
+            prediction = diffusion.p_sample(
+                model, 
+                batch, 
+                args.sampling_steps, 
+                user_semantic=user_semantic,
+                item_embeddings=item_embs,
+                sampling_noise=args.sampling_noise
+            )
             
-            # 屏蔽歷史交互
             prediction[his_data.nonzero()] = -np.inf
             
-            # 獲取topK推薦
             _, indices = torch.topk(prediction, topN[-1])
             indices = indices.cpu().numpy().tolist()
             predict_items.extend(indices)
             
-            # 冷啟動分析（如果啟用）
             if cold_start_items is not None:
                 batch_start = batch_idx * args.batch_size
                 batch_end = min(batch_start + len(batch), e_N)
@@ -184,7 +181,6 @@ def evaluate_with_semantic(data_loader, data_te, mask_his, topN,
                 for i in range(len(indices)):
                     user_idx = batch_start + i
                     if user_idx < len(target_items):
-                        # 檢查該用戶是否有冷啟動目標物品
                         user_targets = set(target_items[user_idx])
                         user_cold_targets = user_targets.intersection(cold_start_items)
                         
@@ -192,24 +188,20 @@ def evaluate_with_semantic(data_loader, data_te, mask_his, topN,
                             cold_start_stats['users_with_cold_items'] += 1
                             cold_start_stats['total_recommendations'] += topN[-1]
                             
-                            # 檢查推薦中是否有冷啟動物品
                             user_recommendations = indices[i]
                             cold_recommended = set(user_recommendations).intersection(cold_start_items)
                             
                             if cold_recommended:
                                 cold_start_stats['cold_item_recommendations'] += len(cold_recommended)
                                 
-                                # 檢查是否命中了冷啟動目標
                                 cold_hits = cold_recommended.intersection(user_cold_targets)
                                 if cold_hits:
                                     cold_start_stats['cold_hits'] += len(cold_hits)
                     
                     cold_start_stats['total_users'] += 1
     
-    # 計算評估指標
     test_results = evaluate_utils.computeTopNAccuracy(target_items, predict_items, topN)
     
-    # 冷啟動分析結果
     if cold_start_items is not None and cold_start_stats['total_users'] > 0:
         print("\n" + "="*50)
         print("COLD-START ANALYSIS")
@@ -228,12 +220,10 @@ def evaluate_with_semantic(data_loader, data_te, mask_his, topN,
     
     return test_results
 
-# ===== 執行評估 =====
 print("\n" + "="*50)
 print("EVALUATION START")
 print("="*50)
 
-# 驗證集評估
 print("\n[Validation Set Evaluation]")
 valid_results = evaluate_with_semantic(
     test_loader, valid_y_data, train_data, eval(args.topN), 
@@ -241,7 +231,6 @@ valid_results = evaluate_with_semantic(
 )
 evaluate_utils.print_results(None, valid_results, None)
 
-# 測試集評估
 print("\n[Test Set Evaluation]")
 if args.tst_w_val:
     test_results = evaluate_with_semantic(
@@ -255,13 +244,11 @@ else:
     )
 evaluate_utils.print_results(None, None, test_results)
 
-# ===== 可選：冷啟動物品相似度分析 =====
 if args.cold_start and semantic_processor is not None and cold_start_items:
     print("\n" + "="*50)
     print("COLD-START ITEM SIMILARITY ANALYSIS")
     print("="*50)
     
-    # 隨機選擇幾個冷啟動物品分析
     sample_cold_items = list(cold_start_items)[:5] if len(cold_start_items) > 5 else cold_start_items
     
     for item_id in sample_cold_items:
@@ -272,7 +259,6 @@ if args.cold_start and semantic_processor is not None and cold_start_items:
         for sim_item, sim_score in zip(similar_items, similarities):
             print(f"    Item {sim_item}: similarity = {sim_score:.4f}")
         
-        # 檢查這些相似物品是否在訓練集中
         train_items_set = set(np.load(train_path)[:, 1])
         in_train = [sim_item in train_items_set for sim_item in similar_items]
         print(f"  Similar items in training set: {sum(in_train)}/{len(in_train)}")

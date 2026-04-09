@@ -22,11 +22,11 @@ def timestep_embedding(timesteps, dim, max_period=10000):
 
 class SemanticDNN(nn.Module):
     """
-    支持語義輸入的深度神經網路，用於反向擴散過程。
-    融合三種信息：
-    1. 用戶交互向量 x_t
-    2. 時間嵌入
-    3. 用戶語義向量（從物品語義嵌入聚合得到）
+    Deep Neural Network supporting semantic input for the reverse diffusion process.
+    Fuses three types of information:
+    1. User interaction vector x_t
+    2. Timestep embedding
+    3. User semantic vector (aggregated from item semantic embeddings)
     """
     def __init__(self, in_dims, out_dims, emb_size, semantic_dim=768, 
                  time_type="cat", norm=False, dropout=0.5, 
@@ -42,10 +42,10 @@ class SemanticDNN(nn.Module):
         self.use_semantic = use_semantic
         self.norm = norm
 
-        # 時間嵌入層
+        # Timestep embedding layer
         self.emb_layer = nn.Linear(self.time_emb_dim, self.time_emb_dim)
         
-        # 語義投影層：將原始語義向量降維
+        # Semantic projection layer: reduce dimensionality of original semantic vector
         if self.use_semantic:
             self.semantic_projection = nn.Sequential(
                 nn.Linear(semantic_dim, semantic_proj_dim),
@@ -56,13 +56,13 @@ class SemanticDNN(nn.Module):
         else:
             self.semantic_projection = None
         
-        # 根據是否使用語義調整輸入維度
+        # Adjust input dimension based on whether semantics are used
         if self.time_type == "cat":
             if self.use_semantic:
-                # 輸入維度：交互向量 + 時間嵌入 + 語義投影
+                # Input dimensions: interaction vector + timestep embedding + semantic projection
                 additional_dims = self.time_emb_dim + semantic_proj_dim
             else:
-                # 後向兼容：交互向量 + 時間嵌入
+                # Backward compatibility: interaction vector + timestep embedding
                 additional_dims = self.time_emb_dim
             
             in_dims_temp = [self.in_dims[0] + additional_dims] + self.in_dims[1:]
@@ -71,11 +71,11 @@ class SemanticDNN(nn.Module):
         
         out_dims_temp = self.out_dims
         
-        # 輸入層
+        # Input layers
         self.in_layers = nn.ModuleList([nn.Linear(d_in, d_out) \
             for d_in, d_out in zip(in_dims_temp[:-1], in_dims_temp[1:])])
         
-        # 輸出層
+        # Output layers
         self.out_layers = nn.ModuleList([nn.Linear(d_in, d_out) \
             for d_in, d_out in zip(out_dims_temp[:-1], out_dims_temp[1:])])
         
@@ -83,7 +83,7 @@ class SemanticDNN(nn.Module):
         self.init_weights()
     
     def init_weights(self):
-        """Xavier初始化權重"""
+        """Xavier initialization for weights"""
         layers = []
         if hasattr(self, 'in_layers'):
             layers.extend(self.in_layers)
@@ -107,46 +107,46 @@ class SemanticDNN(nn.Module):
     def forward(self, x, timesteps, user_semantic=None, item_embeddings=None):
         """
         Args:
-            x: 用戶交互向量 [batch_size, n_items]
-            timesteps: 時間步 [batch_size]
-            user_semantic: 用戶語義向量 [batch_size, semantic_dim] 或 None
+            x: User interaction vector [batch_size, n_items]
+            timesteps: Timesteps [batch_size]
+            user_semantic: User semantic vector [batch_size, semantic_dim] or None
         
         Returns:
-            h: 預測的交互概率 [batch_size, n_items]
+            h: Predicted interaction probabilities [batch_size, n_items]
         """
-        # 時間嵌入
+        # Timestep embedding
         time_emb = timestep_embedding(timesteps, self.time_emb_dim).to(x.device)
         time_emb = self.emb_layer(time_emb)
         
-        # 可選的輸入歸一化
+        # Optional input normalization
         if self.norm:
             x = F.normalize(x)
         
         x = self.drop(x)
         
-        # 處理語義輸入
+        # Process semantic input
         if self.use_semantic and user_semantic is not None:
-            # 投影語義向量
+            # Project semantic vector
             semantic_proj = self.semantic_projection(user_semantic)
-            # 拼接所有輸入
+            # Concatenate all inputs
             h = torch.cat([x, time_emb, semantic_proj], dim=-1)
         else:
-            # 後向兼容：如果不使用語義或沒有語義輸入
+            # Backward compatibility: if semantics are not used or no semantic input
             if self.use_semantic:
-                # 創建零向量作為語義輸入
+                # Create zero vector as semantic input
                 batch_size = x.shape[0]
                 semantic_proj = torch.zeros(batch_size, self.semantic_proj_dim).to(x.device)
                 h = torch.cat([x, time_emb, semantic_proj], dim=-1)
             else:
-                # 原始模式：只拼接交互向量和時間嵌入
+                # Original mode: only concatenate interaction vector and timestep embedding
                 h = torch.cat([x, time_emb], dim=-1)
         
-        # 前向傳播：輸入層
+        # Forward pass: input layers
         for i, layer in enumerate(self.in_layers):
             h = layer(h)
             h = torch.tanh(h)
         
-        # 前向傳播：輸出層
+        # Forward pass: output layers
         for i, layer in enumerate(self.out_layers):
             h = layer(h)
             if i != len(self.out_layers) - 1:
@@ -157,11 +157,11 @@ class SemanticDNN(nn.Module):
 
 class DualStreamSemanticDNN(nn.Module):
     """
-    雙流架構的語義DNN（策略C的實現）
-    兩個流：
-    1. 交互流：處理用戶交互向量
-    2. 語義流：處理用戶語義向量
-    最後融合兩個流的輸出
+    Dual-stream architecture semantic DNN (Implementation of Strategy C)
+    Two streams:
+    1. Interaction stream: process user interaction vector
+    2. Semantic stream: process user semantic vector
+    Finally, fuse the outputs of the two streams
     """
     def __init__(self, in_dims, out_dims, emb_size, semantic_dim=768,
                  time_type="cat", norm=False, dropout=0.5,
@@ -176,10 +176,10 @@ class DualStreamSemanticDNN(nn.Module):
         self.semantic_dim = semantic_dim
         self.norm = norm
         
-        # 時間嵌入層
+        # Timestep embedding layer
         self.emb_layer = nn.Linear(self.time_emb_dim, self.time_emb_dim)
         
-        # 交互流：處理用戶交互向量 + 時間嵌入
+        # Interaction stream: process user interaction vector + timestep embedding
         if self.time_type == "cat":
             interaction_input_dim = in_dims[0] + self.time_emb_dim
         else:
@@ -195,7 +195,7 @@ class DualStreamSemanticDNN(nn.Module):
             nn.Linear(interaction_hidden // 2, fusion_hidden // 2)
         )
         
-        # 語義流：處理用戶語義向量
+        # Semantic stream: process user semantic vector
         self.semantic_stream = nn.Sequential(
             nn.Linear(semantic_dim, semantic_hidden),
             nn.ReLU(),
@@ -206,7 +206,7 @@ class DualStreamSemanticDNN(nn.Module):
             nn.Linear(semantic_hidden // 2, fusion_hidden // 2)
         )
         
-        # 融合層：合併兩個流的輸出
+        # Fusion layer: merge the outputs of the two streams
         self.fusion_layers = nn.Sequential(
             nn.Linear(fusion_hidden, fusion_hidden // 2),
             nn.ReLU(),
@@ -218,30 +218,30 @@ class DualStreamSemanticDNN(nn.Module):
         self.init_weights()
     
     def init_weights(self):
-        """初始化權重"""
+        """Initialize weights"""
         def init_layer(layer):
             if isinstance(layer, nn.Linear):
                 nn.init.xavier_uniform_(layer.weight)
                 if layer.bias is not None:
                     nn.init.normal_(layer.bias, 0, 0.001)
         
-        # 初始化交互流
+        # Initialize interaction stream
         for layer in self.interaction_stream:
             init_layer(layer)
         
-        # 初始化語義流
+        # Initialize semantic stream
         for layer in self.semantic_stream:
             init_layer(layer)
         
-        # 初始化融合層
+        # Initialize fusion layer
         for layer in self.fusion_layers:
             init_layer(layer)
         
-        # 初始化時間嵌入層
+        # Initialize timestep embedding layer
         init_layer(self.emb_layer)
     
     def forward(self, x, timesteps, user_semantic=None, item_embeddings=None):
-        # 時間嵌入
+        # Timestep embedding
         time_emb = timestep_embedding(timesteps, self.time_emb_dim).to(x.device)
         time_emb = self.emb_layer(time_emb)
         
@@ -250,36 +250,36 @@ class DualStreamSemanticDNN(nn.Module):
         
         x = self.drop(x)
         
-        # 交互流輸入
+        # Interaction stream input
         if self.time_type == "cat":
             interaction_input = torch.cat([x, time_emb], dim=-1)
         else:
             interaction_input = x
         
-        # 交互流
+        # Interaction stream
         interaction_output = self.interaction_stream(interaction_input)
         
-        # 語義流
+        # Semantic stream
         if user_semantic is not None:
             semantic_output = self.semantic_stream(user_semantic)
         else:
-            # 如果沒有語義輸入，使用零向量
+            # If no semantic input, use zero vector
             batch_size = x.shape[0]
             semantic_output = torch.zeros(batch_size, 
                                          self.interaction_stream[-1].out_features).to(x.device)
         
-        # 融合兩個流的輸出
+        # Merge the outputs of the two streams
         fused = torch.cat([interaction_output, semantic_output], dim=-1)
         
-        # 融合層
+        # Fusion layer
         output = self.fusion_layers(fused)
         
         return output
 
 class FiLMSemanticDNN(nn.Module):
     """
-    基於 FiLM (Feature-wise Linear Modulation) 的語義擴散神經網路。
-    將使用者語義 $s_u$ 作為條件控制信號，對去噪主幹網路的隱藏特徵進行仿射變換。
+    Semantic diffusion neural network based on FiLM (Feature-wise Linear Modulation).
+    Uses user semantics $s_u$ as a condition control signal to perform affine transformation on the hidden features of the denoising backbone network.
     """
     def __init__(self, in_dims, out_dims, emb_size, semantic_dim=768, 
                  time_type="cat", norm=False, dropout=0.5, 
@@ -294,11 +294,11 @@ class FiLMSemanticDNN(nn.Module):
         self.use_semantic = use_semantic
         self.norm = norm
 
-        # 時間嵌入層
+        # Timestep embedding layer
         self.emb_layer = nn.Linear(self.time_emb_dim, self.time_emb_dim)
         
-        # 1. 定義去噪主幹網路 (Denoising Backbone) 的維度
-        # 輸入不再包含語義向量，僅拼接交互向量 x_t 和時間嵌入 tau(t)
+        # 1. Define the dimensions of the Denoising Backbone network
+        # Input no longer contains semantic vectors, only concatenates interaction vector x_t and timestep embedding tau(t)
         if self.time_type == "cat":
             backbone_input_dim = self.in_dims[0] + self.time_emb_dim
             in_dims_temp = [backbone_input_dim] + self.in_dims[1:]
@@ -307,22 +307,22 @@ class FiLMSemanticDNN(nn.Module):
         
         out_dims_temp = self.out_dims
         
-        # 主幹網路 - 輸入層
+        # Backbone network - input layers
         self.in_layers = nn.ModuleList([nn.Linear(d_in, d_out) \
             for d_in, d_out in zip(in_dims_temp[:-1], in_dims_temp[1:])])
         
-        # 主幹網路 - 輸出層
+        # Backbone network - output layers
         self.out_layers = nn.ModuleList([nn.Linear(d_in, d_out) \
             for d_in, d_out in zip(out_dims_temp[:-1], out_dims_temp[1:])])
         
         self.drop = nn.Dropout(dropout)
         
-        # 2. 定義語義控制器 (Semantic Controller)
-        # 目標是主幹網路的第一個隱藏層 (即 in_dims_temp[1])
+        # 2. Define Semantic Controller
+        # Target is the first hidden layer of the backbone network (i.e. in_dims_temp[1])
         self.film_target_dim = in_dims_temp[1] 
         
         if self.use_semantic:
-            # 輸出維度為 2 * target_dim，用來切分為 gamma (縮放) 和 beta (平移)
+            # Output dimension is 2 * target_dim, used to split into gamma (scaling) and beta (shifting)
             self.semantic_controller = nn.Sequential(
                 nn.Linear(self.semantic_dim, semantic_hidden_dim),
                 nn.ReLU(),
@@ -331,12 +331,12 @@ class FiLMSemanticDNN(nn.Module):
         else:
             self.semantic_controller = None
             
-        # 執行權重初始化 (包含核心的 Zero-Initialization)
+        # Execute weight initialization (including core Zero-Initialization)
         self.init_weights()
     
     def init_weights(self):
-        """初始化權重，嚴格遵循 SemanticDNN 的風格與 FiLM 的防崩潰約束"""
-        # --- 主幹網路與時間嵌入的 Xavier 初始化 ---
+        """Initialize weights, strictly following SemanticDNN style and anti-collapse constraints of FiLM"""
+        # --- Xavier initialization of backbone network and timestep embedding ---
         layers_to_init = []
         if hasattr(self, 'in_layers'):
             layers_to_init.extend(self.in_layers)
@@ -355,9 +355,9 @@ class FiLMSemanticDNN(nn.Module):
                 if layer.bias is not None:
                     layer.bias.data.normal_(0.0, 0.001)
 
-        # --- 語義控制器 (Semantic Controller) 的特殊初始化 ---
+        # --- Special initialization of Semantic Controller ---
         if self.use_semantic and self.semantic_controller is not None:
-            # 前面的特徵提取層使用常規 Xavier 初始化
+            # Previous feature extraction layers use regular Xavier initialization
             for layer in self.semantic_controller[:-1]:
                 if isinstance(layer, nn.Linear):
                     size = layer.weight.size()
@@ -368,15 +368,15 @@ class FiLMSemanticDNN(nn.Module):
                     if layer.bias is not None:
                         layer.bias.data.normal_(0.0, 0.001)
             
-            # 極度重要：最後一層的權重與偏差必須初始化為 0
-            # 確保初始輸出 gamma=0, beta=0，使 FiLM 層等同於 Identity Mapping
+            # Extremely important: the weight and bias of the last layer must be initialized to 0
+            # Ensure initial output gamma=0, beta=0, making the FiLM layer equivalent to Identity Mapping
             final_layer = self.semantic_controller[-1]
             nn.init.zeros_(final_layer.weight)
             if final_layer.bias is not None:
                 nn.init.zeros_(final_layer.bias)
     
     def forward(self, x, timesteps, user_semantic=None, item_embeddings=None):
-        # 1. 時間嵌入
+        # 1. Timestep embedding
         time_emb = timestep_embedding(timesteps, self.time_emb_dim).to(x.device)
         time_emb = self.emb_layer(time_emb)
         
@@ -384,28 +384,28 @@ class FiLMSemanticDNN(nn.Module):
             x = F.normalize(x)
         x = self.drop(x)
         
-        # 2. 構建主幹網路的輸入 (僅拼接 x_t 和時間嵌入)
+        # 2. Construct backbone network input (only concatenates x_t and timestep embedding)
         if self.time_type == "cat":
             h = torch.cat([x, time_emb], dim=-1)
         else:
             h = x
             
-        # 3. 前向傳播：通過第一層隱藏層並激活
+        # 3. Forward pass: pass through the first hidden layer and activate
         h = self.in_layers[0](h)
         h = torch.tanh(h)
         
-        # 4. ======= FiLM 語義調變 (Semantic Modulation) =======
+        # 4. ======= FiLM Semantic Modulation =======
         if self.use_semantic and user_semantic is not None:
-            # 計算調變參數
+            # Calculate modulation parameters
             film_params = self.semantic_controller(user_semantic) # [batch_size, 2 * film_target_dim]
             
-            # 切分為縮放因子 gamma 和平移因子 beta
-            gamma, beta = torch.chunk(film_params, 2, dim=-1) # 各自 [batch_size, film_target_dim]
+            # Split into scaling factor gamma and shifting factor beta
+            gamma, beta = torch.chunk(film_params, 2, dim=-1) # Both [batch_size, film_target_dim]
             
-            # 執行調變: h_new = (1 + gamma) * h + beta
+            # Execute modulation: h_new = (1 + gamma) * h + beta
             h = (1.0 + gamma) * h + beta
 
-        # 5. 繼續主幹網路的剩餘前向傳播
+        # 5. Continue remaining forward pass of backbone network
         for i in range(1, len(self.in_layers)):
             h = self.in_layers[i](h)
             h = torch.tanh(h)
@@ -419,8 +419,8 @@ class FiLMSemanticDNN(nn.Module):
 
 class FiLMDotProductDNN(nn.Module):
     """
-    基於 FiLM 且輸出層為「語義內積」的擴散神經網路 (專為冷啟動設計)。
-    不再依賴 ID 映射，而是預測用戶的「理想物品語義」，並與全局物品語義庫進行內積打分。
+    Diffusion neural network based on FiLM with output layer using "semantic dot product" (specifically designed for cold start).
+    No longer relies on ID mapping, but rather predicts the user's "ideal item semantics" and performs a dot product score with the global item semantics library.
     """
     def __init__(self, in_dims, out_dims, emb_size, semantic_dim=1024,
                  time_type="cat", norm=False, dropout=0.5,
@@ -428,37 +428,37 @@ class FiLMDotProductDNN(nn.Module):
         super(FiLMDotProductDNN, self).__init__()
         self.in_dims = in_dims
         self.out_dims = out_dims
-        self.n_items = out_dims[-1]  # 最後一個維度即為物品總數
+        self.n_items = out_dims[-1]  # The last dimension is the total number of items
         self.time_type = time_type
         self.time_emb_dim = emb_size
         self.semantic_dim = semantic_dim
         self.use_semantic = use_semantic
         self.norm = norm
 
-        # 時間嵌入層
+        # Timestep embedding layer
         self.emb_layer = nn.Linear(self.time_emb_dim, self.time_emb_dim)
 
-        # 1. 定義去噪主幹網路的維度 (剔除最後的 n_items)
+        # 1. Define Denoising Backbone network dimensions (exclude the final n_items)
         if self.time_type == "cat":
             backbone_input_dim = self.in_dims[0] + self.time_emb_dim
             in_dims_temp = [backbone_input_dim] + self.in_dims[1:]
         else:
             raise ValueError("Unimplemented timestep embedding type %s" % self.time_type)
 
-        # 這裡 out_dims_temp 捨棄最後的 n_items，僅保留隱藏層維度
+        # Here out_dims_temp discards the final n_items, retaining only the hidden layer dimension
         out_dims_temp = self.out_dims[:-1]
 
-        # 主幹網路 - 輸入層
+        # Backbone network - input layers
         self.in_layers = nn.ModuleList([nn.Linear(d_in, d_out) \
             for d_in, d_out in zip(in_dims_temp[:-1], in_dims_temp[1:])])
 
-        # 主幹網路 - 輸出層 (僅到最後一個隱藏層，例如 400)
+        # Backbone network - output layers (only to the last hidden layer, e.g. 400)
         self.out_layers = nn.ModuleList([nn.Linear(d_in, d_out) \
             for d_in, d_out in zip(out_dims_temp[:-1], out_dims_temp[1:])])
 
         self.drop = nn.Dropout(dropout)
 
-        # 2. 定義 FiLM 語義控制器
+        # 2. Define FiLM Semantic Controller
         self.film_target_dim = in_dims_temp[1]
         if self.use_semantic:
             self.semantic_controller = nn.Sequential(
@@ -469,19 +469,19 @@ class FiLMDotProductDNN(nn.Module):
         else:
             self.semantic_controller = None
 
-        # 3. 💥 全新：語義內積輸出層 💥
-        # 將最後的隱藏層映射回 1024 維的語義空間
+        # 3. NEW: Semantic Dot Product Output Layer
+        # Map the final hidden layer back to the semantic space of dimension 1024
         last_hidden_dim = out_dims_temp[-1] if len(out_dims_temp) > 0 else in_dims_temp[-1]
         self.semantic_output_layer = nn.Linear(last_hidden_dim, self.semantic_dim)
 
-        # 為了穩定訓練，加入可學習的溫度縮放 (Temperature) 與 物品偏差 (Item Bias)
-        #self.tau = nn.Parameter(torch.ones(1) * 10.0) # 初始放大 10 倍，避免 L2 內積數值過小
+        # To stabilize training, add learnable temperature scaling and item bias
+        #self.tau = nn.Parameter(torch.ones(1) * 10.0) # Initial scaling by 10 times to prevent extremely small L2 dot product values
         #self.item_bias = nn.Parameter(torch.zeros(self.n_items))
 
         self.init_weights()
 
     def init_weights(self):
-        """初始化權重，包含 FiLM 的零初始化與常規 Xavier"""
+        """Initialize weights, including FiLM zero-initialization and regular Xavier"""
         layers_to_init = []
         if hasattr(self, 'in_layers'): layers_to_init.extend(self.in_layers)
         if hasattr(self, 'out_layers'): layers_to_init.extend(self.out_layers)
@@ -493,7 +493,7 @@ class FiLMDotProductDNN(nn.Module):
                 if layer.bias is not None:
                     nn.init.normal_(layer.bias, 0, 0.001)
 
-        # FiLM 控制器的零初始化防崩潰
+        # FiLM Controller zero-initialization to prevent collapse
         if self.use_semantic and self.semantic_controller is not None:
             for layer in self.semantic_controller[:-1]:
                 if isinstance(layer, nn.Linear):
@@ -506,9 +506,9 @@ class FiLMDotProductDNN(nn.Module):
 
     def forward(self, x, timesteps, user_semantic=None, item_embeddings=None):
         """
-        新增 item_embeddings 參數 [n_items, semantic_dim]
+        Added item_embeddings parameter [n_items, semantic_dim]
         """
-        # 1. 時間嵌入與輸入處理
+        # 1. Timestep embedding and input processing
         time_emb = timestep_embedding(timesteps, self.time_emb_dim).to(x.device)
         time_emb = self.emb_layer(time_emb)
         if self.norm: x = F.normalize(x)
@@ -516,7 +516,7 @@ class FiLMDotProductDNN(nn.Module):
 
         h = torch.cat([x, time_emb], dim=-1) if self.time_type == "cat" else x
 
-        # 2. 第一層與 FiLM 調變
+        # 2. First layer and FiLM Modulation
         h = self.in_layers[0](h)
         h = torch.tanh(h)
         if self.use_semantic and user_semantic is not None:
@@ -524,7 +524,7 @@ class FiLMDotProductDNN(nn.Module):
             gamma, beta = torch.chunk(film_params, 2, dim=-1)
             h = (1.0 + gamma) * h + beta
 
-        # 3. 主幹網路前向傳播
+        # 3. Backbone network forward pass
         for i in range(1, len(self.in_layers)):
             h = self.in_layers[i](h)
             h = torch.tanh(h)
@@ -532,22 +532,22 @@ class FiLMDotProductDNN(nn.Module):
             h = layer(h)
             h = torch.tanh(h)
 
-        # 4. 💥 語義預測與內積打分 💥
-        # 推測用戶此刻理想的物品語義 [batch_size, 1024]
+        # 4. Semantic Prediction and Dot Product Scoring
+        # Predict the user's ideal item semantics at this moment [batch_size, 1024]
         pred_semantic = self.semantic_output_layer(h)
 
         if item_embeddings is None:
             raise ValueError("item_embeddings MUST be provided for FiLMDotProductDNN")
 
-        # L2 正規化 (防止維度爆炸)
+        # L2 Normalization (prevent dimension explosion)
         pred_semantic_norm = F.normalize(pred_semantic, p=2, dim=-1)
         item_embeddings_norm = F.normalize(item_embeddings, p=2, dim=-1)
 
-        # 矩陣內積: [batch_size, 1024] x [1024, n_items] -> [batch_size, n_items]
+        # Matrix dot product: [batch_size, 1024] x [1024, n_items] -> [batch_size, n_items]
         logits = torch.matmul(pred_semantic_norm, item_embeddings.transpose(0, 1))
 
-        # 套用固定溫度參數 (tau=0.1) 與 Diffusion 縮放因子 (scale=10.0)
-        # 參考 SimCLR 標準設定，放大差異的同時保證整體數值範圍符合 Diffusion Loss 需求
+        # Apply fixed temperature parameter (tau=0.1) and Diffusion scaling factor (scale=10.0)
+        # Refers to SimCLR standard setting, magnifying differences while ensuring the overall numerical range conforms to Diffusion Loss demands
         tau = 0.1
         scale = 10.0
         out = (logits / tau) * scale

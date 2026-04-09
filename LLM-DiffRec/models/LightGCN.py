@@ -36,14 +36,14 @@ class LightGCN(nn.Module):
         pos_emb = all_items[pos_items]
         neg_emb = all_items[neg_items]
 
-        # 計算內積打分
+        # Scoring the inner product
         pos_scores = torch.sum(u_emb * pos_emb, dim=1)
         neg_scores = torch.sum(u_emb * neg_emb, dim=1)
 
-        # BPR Loss (最大化正負樣本差距)
+        # BPR Loss
         loss = -torch.mean(torch.nn.functional.logsigmoid(pos_scores - neg_scores))
 
-        # L2 正規化
+        # L2 Regularization
         reg_loss = (1/2) * (self.user_emb.weight[users].norm(2).pow(2) +
                             self.item_emb.weight[pos_items].norm(2).pow(2) +
                             self.item_emb.weight[neg_items].norm(2).pow(2)) / float(len(users))

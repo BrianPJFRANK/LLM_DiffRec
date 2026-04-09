@@ -1,28 +1,27 @@
-# preprocess_data_v0_fixed.py
 import json
-import ast  # 新增：用於解析Python字典格式
+import ast
 import numpy as np
 import pandas as pd
 import pickle
 import os
 from tqdm import tqdm
 
-# ===== 設定 =====
-RAW_DIR = './raw_amazon_Software'
-PROCESSED_DIR = './amazon-Software'
+# ===== Configuration =====
+RAW_DIR = './raw_amazon_giftcard'
+PROCESSED_DIR = './amazon-giftcard'
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 
-REVIEW_FILE = os.path.join(RAW_DIR, 'Software_5.json')
-META_FILE = os.path.join(RAW_DIR, 'meta_Software.json')
+REVIEW_FILE = os.path.join(RAW_DIR, 'Gift_Cards_5.json')
+META_FILE = os.path.join(RAW_DIR, 'meta_Gift_Cards.json')
 
-# ===== Step 1: 解析評論 (rating >= 4) =====
+# ===== Step 1: Parse reviews (rating >= 4) =====
 print("Loading reviews...")
 interactions = []
 with open(REVIEW_FILE, 'r') as f:
     for line in tqdm(f, desc="Reading reviews"):
         try:
             r = json.loads(line)
-            if r['overall'] >= 4:  # 只保留评分>=4的交互
+            if r['overall'] >= 4:  # Only keep interactions with rating >= 4
                 interactions.append((r['reviewerID'], r['asin'], r['unixReviewTime']))
         except:
             continue
@@ -30,11 +29,11 @@ with open(REVIEW_FILE, 'r') as f:
 df = pd.DataFrame(interactions, columns=['user_id', 'asin', 'timestamp'])
 print(f"Total clean interactions: {len(df)}")
 
-# ===== Step 2: 按用戶和時間排序 =====
+# ===== Step 2: Sort by user and timestamp =====
 print("Sorting by user_id and timestamp...")
 df = df.sort_values(['user_id', 'timestamp']).reset_index(drop=True)
 
-# ===== Step 3: 構建 ID 映射 =====
+# ===== Step 3: Build ID mapping =====
 print("Constructing ID mapping...")
 all_users = sorted(df['user_id'].unique())
 all_items = sorted(df['asin'].unique())
@@ -48,13 +47,13 @@ with open(os.path.join(PROCESSED_DIR, 'item_map.pkl'), 'wb') as f:
     pickle.dump(item_map, f)
 print("ID mapping construction success.")
 
-# ===== Step 4: 按用戶進行 7:2:1 切分 =====
+# ===== Step 4: Split 7:2:1 per user =====
 print("Splitting per user with 7:2:1 ratio...")
 train_pairs = []
 valid_pairs = []
 test_pairs = []
 
-# 統計信息
+# Statistics
 train_interactions = 0
 valid_interactions = 0
 test_interactions = 0
@@ -62,18 +61,18 @@ test_interactions = 0
 for user_original, group in tqdm(df.groupby('user_id'), desc="Processing users"):
     user_mapped = user_map[user_original]
     
-    # 按時間順序分組
+    # Group by chronological order
     n = len(group)
     train_end = int(0.7 * n)
     valid_end = int(0.9 * n)
     
-    # 確保每個用戶至少有1個訓練樣本和1個測試樣本
+    # Ensure each user has at least 1 training and 1 test sample
     if train_end == 0:
         train_end = 1
     if valid_end <= train_end:
         valid_end = train_end + 1 if n > train_end + 1 else train_end
     
-    # 按時間順序收集交互
+    # Collect interactions in chronological order
     for i, (_, row) in enumerate(group.iterrows()):
         item_mapped = item_map[row['asin']]
         pair = [user_mapped, item_mapped]
@@ -92,28 +91,27 @@ print(f"Train interactions: {train_interactions}")
 print(f"Valid interactions: {valid_interactions}")
 print(f"Test interactions: {test_interactions}")
 
-# ===== Step 4.5: 確保所有物品都在訓練集中出現（重構版，不刪交互，改為搬到 train）=====
+# ===== Step 4.5: Ensure all items appear in the training set (Refactored, moved to train instead of deleting) =====
 print("Ensuring all items appear in training set (refactored)...")
 
-# 目前訓練集中出現的物品
+# Items currently appearing in the training set
 train_items = set([iid for _, iid in train_pairs])
 
-# 所有物品（來自整個 df/item_map）
+# All items (from total df/item_map)
 all_item_ids = set(item_map.values())
 
-# 找出「沒有在 train 出現」的物品
+# Find items not appearing in train
 missing_items = all_item_ids - train_items
 print(f"Items not in initial train: {len(missing_items)}")
 
 if len(missing_items) > 0:
-    new_train_pairs = train_pairs[:]   # 複製
+    new_train_pairs = train_pairs[:]
     new_valid_pairs = []
     new_test_pairs = []
 
-    # 用來記錄某個 item 是否已經從 valid/test 搬了一條到 train
     moved_items = set()
 
-    # 先從 valid 中找這些 item 的最早一條交互搬到 train
+    # Find the earliest interaction of these items in valid to move to train first
     for uid, iid in valid_pairs:
         if iid in missing_items and iid not in moved_items:
             new_train_pairs.append([uid, iid])
@@ -121,7 +119,7 @@ if len(missing_items) > 0:
         else:
             new_valid_pairs.append([uid, iid])
 
-    # 再從 test 中找剩下的 item（在 valid 裡沒找到的）
+    # Then find the remaining items in test (not found in valid)
     for uid, iid in test_pairs:
         if iid in missing_items and iid not in moved_items:
             new_train_pairs.append([uid, iid])
@@ -135,30 +133,30 @@ if len(missing_items) > 0:
     valid_pairs = new_valid_pairs
     test_pairs = new_test_pairs
 
-# 最後再檢查一次：現在 train 應該覆蓋所有 item
+# train should now cover all items
 train_items = set([iid for _, iid in train_pairs])
 missing_items_after = all_item_ids - train_items
 print(f"Items still missing from train after fix: {len(missing_items_after)}")
 if len(missing_items_after) > 0:
-    print("WARNING: some items still do not appear in train (可能原本只有被刪掉的壞數據或極端情況)")
+    print("WARNING: some items still do not appear in train (might only have bad data or extreme cases that were deleted)")
 else:
     print("All items now appear at least once in the training set.")
 
 
-# ===== Step 5: 驗證排序和切分正確性 =====
+# ===== Step 5: Verify sorting and splitting correctness =====
 print("\nVerifying split correctness...")
 
-# 檢查每個用戶的交互是否連續
+# Check if each user's interactions are continuous
 train_dict = {}
 for uid, iid in train_pairs:
     if uid not in train_dict:
         train_dict[uid] = []
     train_dict[uid].append(iid)
 
-# 檢查訓練集中每個用戶的交互是否按時間排序（實際上是按收集順序）
+# Check if each user's interactions in the training set are chronologically sorted (actually by collection order)
 print(f"Number of users in train set: {len(train_dict)}")
 
-# 檢查是否有用戶在訓練集中但不在驗證/測試集中
+# Check if there are users in train but not in valid/test
 train_users = set([uid for uid, _ in train_pairs])
 valid_users_set = set([uid for uid, _ in valid_pairs])
 test_users_set = set([uid for uid, _ in test_pairs])
@@ -167,12 +165,12 @@ print(f"Users in train set: {len(train_users)}")
 print(f"Users in valid set: {len(valid_users_set)}")
 print(f"Users in test set: {len(test_users_set)}")
 
-# 檢查是否有用戶在驗證/測試集中但不在訓練集中
+# Check if there are users in valid/test but not in train
 missing_in_train = (valid_users_set | test_users_set) - train_users
 if len(missing_in_train) > 0:
     print(f"WARNING: {len(missing_in_train)} users in valid/test but not in train")
 
-# ===== Step 6: 輸出 .npy 文件 =====
+# ===== Step 6: Output .npy files =====
 print("\nSaving .npy files...")
 def save_npy(pairs, path):
     np.save(path, np.array(pairs, dtype=np.int32))
@@ -182,7 +180,7 @@ save_npy(train_pairs, os.path.join(PROCESSED_DIR, 'train_list.npy'))
 save_npy(valid_pairs, os.path.join(PROCESSED_DIR, 'valid_list.npy'))
 save_npy(test_pairs, os.path.join(PROCESSED_DIR, 'test_list.npy'))
 
-# 保存統計信息
+# Save statistics
 stats = {
     'n_users': len(all_users),
     'n_items': len(all_items),
@@ -194,35 +192,35 @@ stats = {
 with open(os.path.join(PROCESSED_DIR, 'dataset_stats.json'), 'w') as f:
     json.dump(stats, f, indent=2)
 
-# 修改 preprocess_data_v1.py 中的 Step 7 部分
+# Modify Step 7 part in preprocess_data_v1.py
 
-# ===== Step 7: 提取物品文本（修正版）=====
+# ===== Step 7: Extract item texts (fixed version) =====
 print("\nLoading metadata for item texts...")
 item_texts = {}
 if os.path.exists(META_FILE):
     with open(META_FILE, 'r', encoding='utf-8') as f:
         for line in tqdm(f, desc="Reading metadata"):
             try:
-                # 使用 ast.literal_eval 而不是 json.loads，因為文件是Python字典格式
+                # Use ast.literal_eval instead of json.loads since the file is in Python dict format
                 m = ast.literal_eval(line.strip())
                 asin = m.get('asin')
                 if asin not in item_map:
                     continue
                 
-                # 提取文本字段
+                # Extract text fields
                 title = m.get('title', '').strip()
                 
-                # 處理 description（可能是字符串或列表）
+                # Process description (could be string or list)
                 description = m.get('description', '')
                 if isinstance(description, list):
                     desc = ' '.join([str(d).strip() for d in description if d]).strip()
                 else:
                     desc = str(description).strip() if description else ''
                 
-                # 處理 categories（可能是 categories 或 category）
+                # Process categories (could be categories or category)
                 categories = m.get('categories', m.get('category', []))
                 if categories:
-                    # 展平嵌套列表
+                    # Flatten nested lists
                     flat_categories = []
                     for cat in categories:
                         if isinstance(cat, list):
@@ -233,7 +231,7 @@ if os.path.exists(META_FILE):
                 else:
                     cats = ''
                 
-                # 組合文本
+                # Combine text
                 text_parts = []
                 if title:
                     text_parts.append(title)
@@ -244,30 +242,30 @@ if os.path.exists(META_FILE):
                 
                 text = ' '.join(text_parts).strip()
                 
-                # ===== 關鍵修改：清理文本中的換行符 =====
-                # 替換所有換行符為空格，並合併多餘空格
+                # ===== Crucial modification: clear newlines in text =====
+                # Replace all newlines with spaces, and merge extra spaces
                 if text:
-                    # 替換各種換行符
+                    # Replace various newlines
                     text = text.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
-                    # 合併多個連續空格為單個空格
+                    # Merge multiple consecutive spaces into a single space
                     import re
                     text = re.sub(r'\s+', ' ', text).strip()
                 
-                # 如果所有字段都為空，使用回退文本
+                # If all fields are empty, use fallback text
                 if not text:
                     text = f"instruments_{asin}"
                     
                 item_texts[asin] = text
             except Exception as e:
-                # 如果 ast.literal_eval 失敗，嘗試 json.loads
+                # If ast.literal_eval fails, try json.loads
                 try:
                     m = json.loads(line)
                     asin = m.get('asin')
                     if asin and asin in item_map:
-                        # 提取文本（簡化版本）
+                        # Extract text (simplified version)
                         title = m.get('title', '').strip()
                         text = title if title else f"instruments_{asin}"
-                        # 同樣清理換行符
+                        # Clean newlines as well
                         if text:
                             text = text.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
                             import re
@@ -276,7 +274,7 @@ if os.path.exists(META_FILE):
                 except:
                     continue
 
-    # 按 item_id 順序輸出文本列表
+    # Output text list in item_id order
     print("Saving item text list...")
     reverse_item_map = {i: a for a, i in item_map.items()}
     num_items = len(item_map)
@@ -289,7 +287,7 @@ if os.path.exists(META_FILE):
         if asin in item_texts:
             item_text_list.append(item_texts[asin])
         else:
-            # 如果在 metadata 中找不到，使用回退文本
+            # If not found in metadata, use fallback text
             item_text_list.append(f"instruments_{asin}")
             missing_count += 1
     
@@ -297,21 +295,21 @@ if os.path.exists(META_FILE):
     print(f"Items with metadata: {num_items - missing_count}")
     print(f"Items without metadata (using fallback): {missing_count}")
     
-    # ===== 關鍵修改：驗證每行文本沒有換行符 =====
+    # ===== Crucial modification: verify no newlines in each line of text =====
     print("Verifying text format...")
     for i, text in enumerate(item_text_list):
         if '\n' in text or '\r' in text:
             print(f"Warning: Item {i} contains newline characters, cleaning...")
             item_text_list[i] = text.replace('\n', ' ').replace('\r', ' ').strip()
     
-    # 保存文本列表
+    # Save text list
     with open(os.path.join(PROCESSED_DIR, 'item_text_list.txt'), 'w', encoding='utf-8') as f:
         for text in item_text_list:
             f.write(text + '\n')
     
     print(f"Saved text for {len(item_text_list)} items")
     
-    # 輸出示例以驗證
+    # Output example for verification
     print("\nFirst 10 item texts for verification:")
     for i in range(min(10, len(item_text_list))):
         asin = reverse_item_map[i]
@@ -322,9 +320,9 @@ if os.path.exists(META_FILE):
 else:
     print("Metadata file not found, skipping text extraction")
 
-# ===== Step 8: 生成數據示例以驗證 =====
+# ===== Step 8: Generate data example for verification =====
 print("\nGenerating example for verification...")
-# 選取前5個用戶展示他們的交互分配
+# Select top 5 users to exhibit their interaction distribution
 sample_users = list(user_map.keys())[:5]
 sample_file = os.path.join(PROCESSED_DIR, 'data_split_example.txt')
 with open(sample_file, 'w') as f:
@@ -334,7 +332,7 @@ with open(sample_file, 'w') as f:
     for user_original in sample_users:
         user_mapped = user_map[user_original]
         
-        # 收集該用戶在所有集合中的交互
+        # Collect this user's interactions across all sets
         user_train = [(uid, iid) for uid, iid in train_pairs if uid == user_mapped]
         user_valid = [(uid, iid) for uid, iid in valid_pairs if uid == user_mapped]
         user_test = [(uid, iid) for uid, iid in test_pairs if uid == user_mapped]
@@ -351,7 +349,7 @@ with open(sample_file, 'w') as f:
             else:
                 f.write("\n")
 
-print("\n✅ Data preprocessing completed successfully!")
+print("\n Data preprocessing completed successfully!")
 print(f"Output directory: {PROCESSED_DIR}")
 print(f"\nDataset Statistics:")
 print(f"  Users: {len(all_users)}")

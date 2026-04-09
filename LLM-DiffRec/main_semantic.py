@@ -12,7 +12,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import sys
 
-# 添加路徑
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import models.semantic_diffusion as gd
@@ -36,7 +35,7 @@ def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
 
-# 參數解析
+# Parameter parsing
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='amazon-instruments', help='dataset name')
 parser.add_argument('--data_path', type=str, default='../datasets/', help='data path')
@@ -46,7 +45,7 @@ parser.add_argument('--model_type', type=str, default='semantic', choices=['sema
 parser.add_argument('--semantic_dim', type=int, default=768, help='semantic embedding dimension')
 parser.add_argument('--semantic_proj_dim', type=int, default=128, help='semantic projection dimension')
 
-# 原始參數
+# Original parameters
 parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
 parser.add_argument('--weight_decay', type=float, default=0.0)
 parser.add_argument('--batch_size', type=int, default=400)
@@ -59,13 +58,13 @@ parser.add_argument('--save_path', type=str, default='./saved_models_semantic/',
 parser.add_argument('--log_name', type=str, default='log_semantic', help='the log name')
 parser.add_argument('--round', type=int, default=1, help='record the experiment')
 
-# 模型參數
+# Model parameters
 parser.add_argument('--time_type', type=str, default='cat', help='cat or add')
 parser.add_argument('--dims', type=str, default='[1000]', help='the dims for the DNN')
 parser.add_argument('--norm', type=bool, default=False, help='Normalize the input or not')
 parser.add_argument('--emb_size', type=int, default=10, help='timestep embedding size')
 
-# 擴散參數
+# Diffusion parameters
 parser.add_argument('--mean_type', type=str, default='x0', help='MeanType for diffusion: x0, eps')
 parser.add_argument('--steps', type=int, default=100, help='diffusion steps')
 parser.add_argument('--noise_schedule', type=str, default='linear-var', help='schedule for noise generating')
@@ -79,8 +78,7 @@ parser.add_argument('--reweight', type=bool, default=True, help='assign differen
 args = parser.parse_args()
 print("Semantic Diffusion Args:", args)
 
-# 設備設置
-if args.cuda and torch.npu.is_available():
+if args.cuda and hasattr(torch, 'npu') and torch.npu.is_available():
     device = torch.device(f"npu:{args.gpu}")
     print(f"Using NPU Device: npu:{args.gpu}")
 elif args.cuda and torch.cuda.is_available():
@@ -92,7 +90,7 @@ else:
 
 print("Starting time:", time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
 
-# ===== 數據加載 =====
+#Data loading
 train_path = os.path.join(args.data_path, args.dataset, 'train_list.npy')
 valid_path = os.path.join(args.data_path, args.dataset, 'valid_list.npy')
 test_path = os.path.join(args.data_path, args.dataset, 'test_list.npy')
@@ -103,7 +101,7 @@ train_data, valid_y_data, test_y_data, n_user, n_item = data_utils.data_load(
 
 train_dataset = data_utils.DataDiffusion(train_data)
 train_loader = DataLoader(train_dataset, batch_size=args.batch_size, 
-                         pin_memory=True, shuffle=True, num_workers=16)
+                         pin_memory=True, shuffle=True, num_workers=0)
 test_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
 
 if args.tst_w_val:
@@ -115,17 +113,17 @@ mask_tv = train_data + valid_y_data
 
 print(f'Data loaded. Users: {n_user}, Items: {n_item}')
 
-# ===== 語義處理器 =====
+# Semantic processor
 semantic_processor = None
 if args.use_semantic:
     data_dir = os.path.join(args.data_path, args.dataset)
     semantic_processor = semantic_utils.SemanticProcessor(data_dir, device=device)
     
     if semantic_processor.item_embeddings is None:
-        print("⚠️ Semantic embeddings not available, falling back to original model")
+        print("Semantic embeddings not available, falling back to original model")
         args.use_semantic = False
 
-# ===== 構建擴散模型 =====
+# Build diffusion model
 if args.mean_type == 'x0':
     mean_type = gd.ModelMeanType.START_X
 elif args.mean_type == 'eps':
@@ -138,7 +136,7 @@ diffusion = gd.SemanticGaussianDiffusion(
     args.noise_min, args.noise_max, args.steps, device
 ).to(device)
 
-# ===== 構建語義模型 =====
+# Build semantic model
 out_dims = eval(args.dims) + [n_item]
 in_dims = out_dims[::-1]
 
@@ -163,7 +161,7 @@ if args.use_semantic:
         model = FiLMSemanticDNN(
             in_dims, out_dims, args.emb_size,
             semantic_dim=args.semantic_dim,
-            semantic_hidden_dim=256,  # 這裡預設給 256，對應語義控制器的隱藏層
+            semantic_hidden_dim=256,
             time_type=args.time_type,
             norm=args.norm,
             use_semantic=True
@@ -178,28 +176,28 @@ if args.use_semantic:
             use_semantic=True
         ).to(device)
     else:
-        # 後向兼容原始模型
+        # Backward compatibility with original model
         from models.DNN import DNN
         model = DNN(in_dims, out_dims, args.emb_size, 
                    time_type=args.time_type, norm=args.norm).to(device)
 else:
-    # 不使用語義，使用原始模型
+    # Not using semantics, using original model
     from models.DNN import DNN
     model = DNN(in_dims, out_dims, args.emb_size, 
                time_type=args.time_type, norm=args.norm).to(device)
 
 optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-# 參數統計
+# Parameter statistics
 param_num = sum([param.nelement() for param in model.parameters()])
 print(f"Model parameters: {param_num:,}")
 print(f"Using semantic: {args.use_semantic}")
 print(f"Model type: {args.model_type}")
 
-# ===== 評估函數（支持語義） =====
+# Evaluation function (supporting semantics)
 def evaluate_semantic(data_loader, data_te, mask_his, topN, semantic_processor=None, warm_items_mask=None):
     """
-    評估函數，支持語義輸入
+    Evaluation function, supporting semantic input
     """
     model.eval()
     e_idxlist = list(range(mask_his.shape[0]))
@@ -213,21 +211,20 @@ def evaluate_semantic(data_loader, data_te, mask_his, topN, semantic_processor=N
     
     with torch.no_grad():
         for batch_idx, batch in enumerate(data_loader):
-            # his_data = mask_his[e_idxlist[batch_idx*args.batch_size:batch_idx*args.batch_size+len(batch)]]
-            # batch = batch.to(device)
+
             start = batch_idx * args.batch_size
             end = min((batch_idx + 1) * args.batch_size, e_N)
 
             batch = batch.to(device)
             
-            # 計算用戶語義向量
+            # Calculate user semantic vector
             user_semantic = None
             if semantic_processor is not None:
                 user_semantic = semantic_processor.compute_user_semantic_simple(batch)
             
             item_embs = semantic_processor.item_embeddings if semantic_processor is not None else None
 
-            # 預測
+            # Prediction
             if user_semantic is not None:
                 prediction = diffusion.p_sample(model, batch, args.sampling_steps,
                                                user_semantic=user_semantic, item_embeddings=item_embs, sampling_noise=args.sampling_noise)
@@ -235,34 +232,31 @@ def evaluate_semantic(data_loader, data_te, mask_his, topN, semantic_processor=N
                 prediction = diffusion.p_sample(model, batch, args.sampling_steps,
                                                user_semantic=None, item_embeddings=item_embs, sampling_noise=args.sampling_noise)
             
-            # 1. Mask 掉該 User 歷史看過的物品 (原始邏輯)
             prediction[mask_his[start:end].toarray() > 0] = -np.inf
             
-            # 2. 新增：Mask 掉全域的 Warm Items (冷啟動對齊邏輯) 
             if warm_items_mask is not None:
                 prediction[:, warm_items_mask] = -np.inf
 
-            # 獲取topK推薦
+            # Get topK recommendations
             _, indices = torch.topk(prediction, topN[-1])
             indices = indices.cpu().numpy().tolist()
             predict_items.extend(indices)
     
-    # 計算評估指標
+    # Calculate evaluation metrics
     test_results = evaluate_utils.computeTopNAccuracy(target_items, predict_items, topN)
     
     return test_results
 
-# ===== 獲取全域訓練集出現過的物品 (Warm Items) =====
-# 透過計算 train_data 矩陣的列總和，找出有被交互過的 items
+# Get items that appeared in the global training set (Warm Items)
 train_item_counts = np.array(train_data.sum(axis=0)).flatten()
 warm_items_indices = np.where(train_item_counts > 0)[0]
-print(f"🔥 Totally {len(warm_items_indices)} Warm Items (will be Mask in cold start evaluation)")
+print(f"Totally {len(warm_items_indices)} Warm Items (will be Mask in cold start evaluation)")
 
-# 判斷當前是否為冷啟動實驗 (透過數據集名稱判斷)
+# Determine whether the current experiment is cold start (through dataset name)
 is_cold_start_exp = 'coldstart' in args.dataset
 global_warm_mask = warm_items_indices if is_cold_start_exp else None
 
-# ===== 訓練循環 =====
+# Training loop 
 best_recall, best_epoch = -100, 0
 best_results, best_test_results = None, None
 
@@ -282,14 +276,14 @@ for epoch in range(1, args.epochs + 1):
         batch = batch.to(device)
         batch_count += 1
         
-        # 計算用戶語義向量
+        # Calculate user semantic vector
         user_semantic = None
         if args.use_semantic and semantic_processor is not None:
             user_semantic = semantic_processor.compute_user_semantic_simple(batch)
         
         item_embs = semantic_processor.item_embeddings if args.use_semantic and semantic_processor is not None else None
 
-        # 優化步驟
+        # Optimization step
         optimizer.zero_grad()
         
         if user_semantic is not None:
@@ -316,17 +310,17 @@ for epoch in range(1, args.epochs + 1):
     
     avg_loss = total_loss / batch_count if batch_count > 0 else total_loss
     
-    # 定期評估
+    # Periodic evaluation
     if epoch % 5 == 0:
         print(f"\nEpoch {epoch:03d}, Avg Loss: {avg_loss:.4f}")
         
-        # 驗證集評估
+        # Valid evaluation
         valid_results = evaluate_semantic(
             test_loader, valid_y_data, train_data, eval(args.topN), semantic_processor,
             warm_items_mask=global_warm_mask
         )
         
-        # 測試集評估
+        # Test evaluation
         if args.tst_w_val:
             test_results = evaluate_semantic(
                 test_twv_loader, test_y_data, mask_tv, eval(args.topN), semantic_processor,
@@ -340,13 +334,13 @@ for epoch in range(1, args.epochs + 1):
         
         evaluate_utils.print_results(None, valid_results, test_results)
         
-        # 保存最佳模型
+        # Save optimal model
         if valid_results[1][1] > best_recall:  # recall@20
             best_recall, best_epoch = valid_results[1][1], epoch
             best_results = valid_results
             best_test_results = test_results
             
-            # 保存模型
+            # Save model
             if not os.path.exists(args.save_path):
                 os.makedirs(args.save_path)
             
@@ -357,13 +351,13 @@ for epoch in range(1, args.epochs + 1):
             )
             
             torch.save(model, os.path.join(args.save_path, model_filename))
-            print(f"✅ Model saved: {model_filename}")
+            print(f"Model saved: {model_filename}")
     
     print(f"Epoch {epoch:03d} - Train Loss: {avg_loss:.4f} - "
           f"Time: {time.strftime('%H:%M:%S', time.gmtime(time.time()-start_time))}")
     print('---' * 18)
 
-# ===== 最終結果 =====
+# ===== Final results =====
 print('=' * 18)
 print(f"Best Epoch: {best_epoch:03d}")
 print("Best Validation Results:")

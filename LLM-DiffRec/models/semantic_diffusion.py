@@ -5,8 +5,8 @@ from models.gaussian_diffusion import GaussianDiffusion, ModelMeanType
 
 class SemanticGaussianDiffusion(GaussianDiffusion):
     """
-    支持語義輸入的高斯擴散類
-    擴展原始GaussianDiffusion以支持語義條件
+    Gaussian diffusion class that supports semantic input.
+    Extends the original GaussianDiffusion to support semantic conditions.
     """
     def __init__(self, mean_type, noise_schedule, noise_scale, noise_min, noise_max,
                  steps, device, history_num_per_term=10, beta_fixed=True):
@@ -15,16 +15,16 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
     
     def training_losses(self, model, x_start, user_semantic=None, item_embeddings=None,reweight=False):
         """
-        計算訓練損失，支持語義輸入
+        Calculate training loss, supporting semantic input.
         
         Args:
-            model: 預測模型
-            x_start: 原始交互向量 [batch_size, n_items]
-            user_semantic: 用戶語義向量 [batch_size, semantic_dim] 或 None
-            reweight: 是否使用重要性採樣
+            model: Prediction model
+            x_start: Original interaction vector [batch_size, n_items]
+            user_semantic: User semantic vector [batch_size, semantic_dim] or None
+            reweight: Whether to use importance sampling
         
         Returns:
-            terms: 包含損失的字典
+            terms: Dictionary containing losses
         """
         batch_size, device = x_start.size(0), x_start.device
         ts, pt = self.sample_timesteps(batch_size, device, 'importance')
@@ -37,7 +37,6 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
         
         terms = {}
         
-        # 修改：傳遞語義向量給模型
         if user_semantic is not None:
             model_output = model(x_t, ts, user_semantic=user_semantic, item_embeddings=item_embeddings)
         else:
@@ -52,7 +51,6 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
         
         mse = self.mean_flat((target - model_output) ** 2)
         
-        # 修復：確保 loss 變量總是被初始化
         if reweight == True:
             if self.mean_type == ModelMeanType.START_X:
                 weight = self.SNR(ts - 1) - self.SNR(ts)
@@ -65,7 +63,7 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
                 loss = th.where((ts == 0), likelihood, mse)
         else:
             weight = th.tensor([1.0] * len(target)).to(device)
-            loss = mse  # 當不使用reweight時，直接使用MSE
+            loss = mse  # Directly use MSE when reweight is not used
         
         terms["loss"] = weight * loss
         
@@ -89,17 +87,17 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
     
     def p_sample(self, model, x_start, steps, user_semantic=None, item_embeddings=None, sampling_noise=False):
         """
-        採樣過程，支持語義輸入
+        Sampling process, supporting semantic input.
         
         Args:
-            model: 預測模型
-            x_start: 起始向量
-            steps: 採樣步數
-            user_semantic: 用戶語義向量
-            sampling_noise: 是否添加採樣噪聲
+            model: Prediction model
+            x_start: Start vector
+            steps: Number of sampling steps
+            user_semantic: User semantic vector
+            sampling_noise: Whether to add sampling noise
         
         Returns:
-            x_t: 採樣結果
+            x_t: Sampling result
         """
         assert steps <= self.steps, "Too much steps in inference."
         if steps == 0:
@@ -121,7 +119,6 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
         
         for i in indices:
             t = th.tensor([i] * x_t.shape[0]).to(x_start.device)
-            # 修改：傳遞語義向量給p_mean_variance
             out = self.p_mean_variance(model, x_t, t, user_semantic, item_embeddings)
             if sampling_noise:
                 noise = th.randn_like(x_t)
@@ -135,12 +132,11 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
     
     def p_mean_variance(self, model, x, t, user_semantic=None, item_embeddings=None):
         """
-        計算均值方差，支持語義輸入
+        Calculate mean and variance, supporting semantic input.
         """
         B, C = x.shape[:2]
         assert t.shape == (B,)
         
-        # 修改：傳遞語義向量給模型
         if user_semantic is not None:
             model_output = model(x, t, user_semantic, item_embeddings=item_embeddings)
         else:
@@ -174,5 +170,5 @@ class SemanticGaussianDiffusion(GaussianDiffusion):
     
     @staticmethod
     def mean_flat(tensor):
-        """輔助函數：計算非批次維度的平均值"""
+        """Helper function: Calculate mean across non-batch dimensions."""
         return tensor.mean(dim=list(range(1, len(tensor.shape))))

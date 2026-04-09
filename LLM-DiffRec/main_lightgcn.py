@@ -50,9 +50,8 @@ current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 log_filename = os.path.join(log_dir, f"lightgcn_L{args.layers}_bs{args.batch_size}_{current_time}.txt")
 sys.stdout = Logger(log_filename)
 
-print(f"✅ Logging output to: {log_filename}")
+print(f"Logging output to: {log_filename}")
 
-# NPU/GPU 適配邏輯
 if args.cuda and hasattr(torch, 'npu') and torch.npu.is_available():
     import torch_npu
     device = torch.device(f"npu:{args.gpu}")
@@ -69,7 +68,6 @@ test_path = os.path.join(args.data_path, args.dataset, 'test_list.npy')
 train_data, valid_y_data, test_y_data, n_user, n_item = data_utils.data_load(train_path, valid_path, test_path)
 mask_tv = train_data + valid_y_data
 
-# 動態構建 User-Item 歸一化二分圖鄰接矩陣 (Normalized Adjacency Matrix)
 def build_adj_mat(R, n_users, n_items):
     adj_mat = sp.dok_matrix((n_users + n_items, n_users + n_items), dtype=np.float32)
     adj_mat = adj_mat.tolil()
@@ -97,7 +95,6 @@ norm_adj_tensor = build_adj_mat(train_data, n_user, n_item)
 model = LightGCN(n_user, n_item, emb_dim=64, n_layers=args.layers).to(device)
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-# 負採樣邏輯
 def bpr_sampling(train_data, batch_size):
     users, pos_items, neg_items = [], [], []
     train_coo = train_data.tocoo()
@@ -119,7 +116,6 @@ def bpr_sampling(train_data, batch_size):
         neg_items.append(j)
     return torch.tensor(users), torch.tensor(pos_items), torch.tensor(neg_items)
 
-# 評估函數
 def evaluate_lightgcn(model, test_data_matrix, mask_matrix, topN):
     model.eval()
     predict_items, target_items = [], []
@@ -134,7 +130,6 @@ def evaluate_lightgcn(model, test_data_matrix, mask_matrix, topN):
             end_idx = min(batch_idx + args.batch_size, e_N)
             u_batch = all_users[batch_idx:end_idx]
 
-            # 矩陣內積打分
             logits = torch.matmul(u_batch, all_items.T)
             logits[mask_matrix[batch_idx:end_idx].toarray() > 0] = -np.inf
 
@@ -148,7 +143,7 @@ best_valid_res, best_test_res = None, None
 
 for epoch in range(1, args.epochs + 1):
     model.train()
-    users, pos_items, neg_items = bpr_sampling(train_data, args.batch_size * 50) # 每個 epoch 採樣一定數量
+    users, pos_items, neg_items = bpr_sampling(train_data, args.batch_size * 50)
     users, pos_items, neg_items = users.to(device), pos_items.to(device), neg_items.to(device)
 
     optimizer.zero_grad()

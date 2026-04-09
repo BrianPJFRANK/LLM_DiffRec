@@ -32,7 +32,7 @@ class MultiVAE(nn.Module):
                 nn.init.trunc_normal_(m.bias, std=0.001)
 
     def forward(self, x):
-        # 輸入 L2 正規化
+        # Input L2 regularization
         x = F.normalize(x, p=2, dim=1)
         x = self.drop(x)
 

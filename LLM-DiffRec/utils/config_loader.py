@@ -9,16 +9,16 @@ import os
 
 def load_config(config_path="config_semantic.yaml", override_args=None):
     """
-    加載配置文件並與命令行參數合併
+    Load the configuration file and merge it with command line arguments.
     
     Args:
-        config_path: 配置文件路徑
-        override_args: 命令行參數（可選）
+        config_path: Configuration file path
+        override_args: Command line arguments (optional)
     
     Returns:
-        config: 合併後的配置字典
+        config: Merged configuration dictionary
     """
-    # 默認配置
+    # Default configuration
     default_config = {
         'dataset': {
             'name': 'amazon-instruments',
@@ -79,12 +79,12 @@ def load_config(config_path="config_semantic.yaml", override_args=None):
         }
     }
     
-    # 加載配置文件（如果存在）
+    # Load configuration file (if exists)
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
             file_config = yaml.safe_load(f)
         
-        # 深度合併配置
+        # Deep merge configuration
         def deep_merge(base, update):
             for key, value in update.items():
                 if key in base and isinstance(base[key], dict) and isinstance(value, dict):
@@ -98,11 +98,11 @@ def load_config(config_path="config_semantic.yaml", override_args=None):
         print(f"Config file {config_path} not found, using defaults")
         config = default_config
     
-    # 用命令行參數覆蓋（如果提供）
+    # Override with command line arguments (if provided)
     if override_args is not None:
         args_dict = vars(override_args)
         
-        # 映射命令行參數到配置鍵
+        # Map command line arguments to configuration keys
         arg_mapping = {
             'dataset': 'dataset.name',
             'data_path': 'dataset.data_path',
@@ -132,7 +132,7 @@ def load_config(config_path="config_semantic.yaml", override_args=None):
         
         for arg_key, config_path in arg_mapping.items():
             if arg_key in args_dict and args_dict[arg_key] is not None:
-                # 設置配置值
+                # Set configuration value
                 path_parts = config_path.split('.')
                 current = config
                 for part in path_parts[:-1]:
@@ -142,12 +142,12 @@ def load_config(config_path="config_semantic.yaml", override_args=None):
     return config
 
 def save_config(config, path):
-    """保存配置到文件"""
+    """Save configuration to file"""
     with open(path, 'w') as f:
         yaml.dump(config, f, default_flow_style=False)
 
 def print_config(config, indent=0):
-    """打印配置"""
+    """Print configuration"""
     for key, value in config.items():
         if isinstance(value, dict):
             print(' ' * indent + f"{key}:")
@@ -156,7 +156,7 @@ def print_config(config, indent=0):
             print(' ' * indent + f"{key}: {value}")
 
 if __name__ == "__main__":
-    # 測試配置加載
+    # Test configuration loading
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='config_semantic.yaml')
     args = parser.parse_args()

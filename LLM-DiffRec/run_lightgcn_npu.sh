@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# 設定參數
 DATASET="amazon-instruments"
 DATA_PATH="../datasets/"
 LR=0.001
@@ -10,9 +9,9 @@ LAYERS=3
 GPU_ID="0"
 
 echo "=================================================="
-echo "🚀 Start running Baseline B: LightGCN (${LAYERS} 層傳播)"
-echo "數據集: ${DATASET} | 學習率: ${LR} | Batch Size: ${BATCH_SIZE}"
-echo "硬體: Huawei Ascend 910 NPU (ID: ${GPU_ID})"
+echo "Start running Baseline B: LightGCN (${LAYERS} layers)"
+echo "Dataset: ${DATASET} | Learning Rate: ${LR} | Batch Size: ${BATCH_SIZE}"
+echo "GPU/NPU/CPU: (ID: ${GPU_ID})"
 echo "=================================================="
 
 python main_lightgcn.py \

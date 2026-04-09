@@ -130,10 +130,8 @@ def evaluate_bucket_film(model_path, train_data, buckets, test_y_data, mask_tv, 
 
     print("Loading FiLM model weights...")
     try:
-        # main_semantic.py 第 282 行使用的是 torch.save(model, ...) 完整保存
         model = torch.load(model_path, map_location=device)
     except:
-        # 兼容模式：如果使用的是 load_state_dict
         model = FiLMSemanticDNN(
             in_dims, out_dims, emb_size=10,
             semantic_dim=1024, semantic_hidden_dim=256,

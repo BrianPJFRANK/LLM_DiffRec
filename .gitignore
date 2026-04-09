@@ -13,9 +13,6 @@ datasets/raw*
 datasets/__MACOSX
 datasets/Yelp JSON
 datasets/datacheck.txt
-datasets/preprocess_data.py
-datasets/preprocess_data_v0.py
-datasets/preprocess_data_v1.py
 datasets/validate_mapping.py
 
 LLM-DiffRec/test_semantic
